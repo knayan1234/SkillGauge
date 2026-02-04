@@ -10,7 +10,7 @@ export default function Navbar() {
   const [open, setOpen] = useState(false);
 
   return (
-    <nav className="bg-transparent shadow-sm text-black px-4 py-20">
+    <nav className="sticky top-0 z-50 bg-white shadow text-black px-4 py-3">
       <div className="max-w-screen flex items-center justify-between">
         {/* Logo / Brand */}
         <div className="text-lg font-semibold">SkillGauge</div>
