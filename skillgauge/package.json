@@ -9,15 +9,18 @@
     "typecheck": "react-router typegen && tsc"
   },
   "dependencies": {
-    "@headlessui/react": "^2.2.9",
-    "@heroicons/react": "^2.2.0",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-slot": "^1.2.4",
     "@react-router/node": "7.10.1",
     "@react-router/serve": "7.10.1",
-    "isbot": "^5.1.31",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.563.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "react-hook-form": "^7.69.0",
-    "react-router": "7.10.1"
+    "react-router": "7.10.1",
+    "tailwind-merge": "^3.4.0",
+    "isbot": "^5"
   },
   "devDependencies": {
     "@react-router/dev": "7.10.1",
