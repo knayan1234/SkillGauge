@@ -74,7 +74,10 @@ export default function LandingPage() {
 
             {/* CTA */}
             <Button
-              onClick={() => setShowAuth(true)}
+              onClick={() => {
+                console.log("Clicked");
+                setShowAuth(true);
+              }}
               size="lg"
               className="px-8 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
             >
