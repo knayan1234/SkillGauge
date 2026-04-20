@@ -1,0 +1,472 @@
+# SkillGauge — Build Progress Log
+
+Living document tracking every change made during the end-to-end build. Newest entries at the top within each phase.
+
+**Current phase:** Phase 1.1 — UX Enhancements **(COMPLETE ✓)** (dark mode, resume-per-session, extended setup inputs)
+**Next phase:** Phase 1.5 — Auth hardening (starts with JWT login polish)
+**Then:** Phase 2 — AI Intelligence, broken into sub-phases 2a → 2e
+**Started:** 2026-04-18
+**Phase 0a finished:** 2026-04-18
+**Phase 0b finished:** 2026-04-19
+**Phase 1 finished:** 2026-04-19
+**Phase 1.1 finished:** 2026-04-20
+
+---
+
+## Phase 0a — Harden FE ✓
+
+### Goals
+- ✓ Add react-query to replace ad-hoc promise handling in hooks
+- ✓ Add zod + react-hook-form for form validation
+- ✓ Add vitest + @testing-library/react for unit tests
+- ✓ Fix dark-mode vs light-theme CSS mismatch
+- ✓ Write parity tests so we can verify Next.js migration in 0b doesn't regress anything
+
+### Checklist
+- [x] Install deps: `@tanstack/react-query`, `zod`, `react-hook-form`, `@hookform/resolvers`, `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`, `jsdom`, `@vitejs/plugin-react@^5`, `@vitest/ui`
+- [x] Fix theme mismatch in [skillgauge/app/root.tsx](skillgauge/app/root.tsx) (removed `className="dark"`, updated `theme-color` meta to `#fafafa`)
+- [x] Add QueryClientProvider in [skillgauge/app/root.tsx](skillgauge/app/root.tsx) with client factory in [skillgauge/app/lib/queryClient.ts](skillgauge/app/lib/queryClient.ts)
+- [x] Refactor [skillgauge/app/hooks/useAuth.ts](skillgauge/app/hooks/useAuth.ts) → react-query mutations for login/register
+- [x] Refactor [skillgauge/app/hooks/useSession.ts](skillgauge/app/hooks/useSession.ts) → react-query mutations for init/submit
+- [x] Convert [skillgauge/app/features/auth/AuthModal.tsx](skillgauge/app/features/auth/AuthModal.tsx) to react-hook-form + zod ([authSchema.ts](skillgauge/app/features/auth/authSchema.ts))
+- [x] Convert [skillgauge/app/features/session-setup/SessionSetupForm.tsx](skillgauge/app/features/session-setup/SessionSetupForm.tsx) to react-hook-form + zod ([sessionSetupSchema.ts](skillgauge/app/features/session-setup/sessionSetupSchema.ts)) — enforces PDF/DOC/DOCX, ≤5MB, JD ≥50 chars
+- [x] Add [vitest.config.ts](skillgauge/vitest.config.ts), setup file [skillgauge/app/test/setup.ts](skillgauge/app/test/setup.ts), `test` / `test:watch` / `test:ui` scripts
+- [x] Add `QueryWrapper` test helper at [skillgauge/app/test/queryWrapper.tsx](skillgauge/app/test/queryWrapper.tsx)
+- [x] Add `vitest/globals` + `@testing-library/jest-dom` to tsconfig types
+- [x] Write tests (20 total, all passing):
+  - [x] [authSchema.test.ts](skillgauge/app/features/auth/authSchema.test.ts) — 4 tests (valid, trim/lowercase, invalid email, short password)
+  - [x] [sessionSetupSchema.test.ts](skillgauge/app/features/session-setup/sessionSetupSchema.test.ts) — 4 tests (valid PDF, wrong type, >5MB, short JD)
+  - [x] [MessageBubble.test.tsx](skillgauge/app/features/interview/MessageBubble.test.tsx) — 4 tests (question, answer, feedback, null)
+  - [x] [useAuth.test.tsx](skillgauge/app/hooks/useAuth.test.tsx) — 4 tests (unauth hydration, auth hydration, login persist, logout clears)
+  - [x] [useSession.test.tsx](skillgauge/app/hooks/useSession.test.tsx) — 4 tests (empty init, init + first question, answer/feedback append, completion after N questions)
+- [x] Green: `npm run typecheck && npm test && npm run build && npm run dev` all pass
+
+### Final verification (2026-04-18)
+
+| Command | Status |
+|---|---|
+| `npm run typecheck` | ✓ clean |
+| `npm test` | ✓ 20/20 tests pass across 5 files (~26s) |
+| `npm run build` | ✓ client + SSR bundles built (8.89s + 554ms) |
+| `npm run dev` + `curl localhost:5173` | ✓ HTTP 200 |
+
+### Changelog
+
+- **2026-04-18 23:50** — Phase 0a complete. All tests green, build green, dev server boots. Cleaned up unused `XCircle` import in MessageBubble after build surfaced warning.
+- **2026-04-18 23:48** — Fixed Node 24 native `localStorage` (lacks `clear`/`removeItem`) shadowing jsdom's by installing a `MemoryStorage` polyfill in [setup.ts](skillgauge/app/test/setup.ts). All 20 tests now pass.
+- **2026-04-18 23:47** — Relaxed `FileList` check in zod to duck-typed `ArrayLike<File>` (jsdom 29 doesn't expose `DataTransfer`; also usable from node).
+- **2026-04-18 23:47** — Created 5 test files covering hooks + components + schemas.
+- **2026-04-18 23:45** — Vitest + RTL + jsdom configured via separate [vitest.config.ts](skillgauge/vitest.config.ts) (decoupled from React Router's vite config).
+- **2026-04-18 23:43** — Converted [SessionSetupForm](skillgauge/app/features/session-setup/SessionSetupForm.tsx) to RHF + zod, including file type / size / JD length validation.
+- **2026-04-18 23:41** — Converted [AuthModal](skillgauge/app/features/auth/AuthModal.tsx) to RHF + zod schema.
+- **2026-04-18 23:38** — Refactored [useSession](skillgauge/app/hooks/useSession.ts) with `useMutation` for init + answer flows; consolidated state transitions.
+- **2026-04-18 23:36** — Refactored [useAuth](skillgauge/app/hooks/useAuth.ts) with `useMutation` for login/register; preserved localStorage hydration + public API.
+- **2026-04-18 23:33** — Wired `QueryClientProvider` in [root.tsx](skillgauge/app/root.tsx); created [queryClient.ts](skillgauge/app/lib/queryClient.ts) with sensible defaults (30s staleTime, retry: 1, no window-focus refetch).
+- **2026-04-18 23:32** — Fixed theme mismatch: removed `className="dark"` from `<html>` (CSS was light-only) and updated `theme-color` meta to `#fafafa`.
+- **2026-04-18 23:30** — Installed deps. Pinned `@vitejs/plugin-react@^5` for Vite 7 peer compatibility.
+
+### Files touched
+
+**Created:**
+- [skillgauge/app/lib/queryClient.ts](skillgauge/app/lib/queryClient.ts)
+- [skillgauge/app/features/auth/authSchema.ts](skillgauge/app/features/auth/authSchema.ts)
+- [skillgauge/app/features/auth/authSchema.test.ts](skillgauge/app/features/auth/authSchema.test.ts)
+- [skillgauge/app/features/session-setup/sessionSetupSchema.ts](skillgauge/app/features/session-setup/sessionSetupSchema.ts)
+- [skillgauge/app/features/session-setup/sessionSetupSchema.test.ts](skillgauge/app/features/session-setup/sessionSetupSchema.test.ts)
+- [skillgauge/app/features/interview/MessageBubble.test.tsx](skillgauge/app/features/interview/MessageBubble.test.tsx)
+- [skillgauge/app/hooks/useAuth.test.tsx](skillgauge/app/hooks/useAuth.test.tsx)
+- [skillgauge/app/hooks/useSession.test.tsx](skillgauge/app/hooks/useSession.test.tsx)
+- [skillgauge/app/test/setup.ts](skillgauge/app/test/setup.ts)
+- [skillgauge/app/test/queryWrapper.tsx](skillgauge/app/test/queryWrapper.tsx)
+- [skillgauge/vitest.config.ts](skillgauge/vitest.config.ts)
+
+**Modified:**
+- [skillgauge/app/root.tsx](skillgauge/app/root.tsx)
+- [skillgauge/app/hooks/useAuth.ts](skillgauge/app/hooks/useAuth.ts)
+- [skillgauge/app/hooks/useSession.ts](skillgauge/app/hooks/useSession.ts)
+- [skillgauge/app/features/auth/AuthModal.tsx](skillgauge/app/features/auth/AuthModal.tsx)
+- [skillgauge/app/features/session-setup/SessionSetupForm.tsx](skillgauge/app/features/session-setup/SessionSetupForm.tsx)
+- [skillgauge/app/features/interview/MessageBubble.tsx](skillgauge/app/features/interview/MessageBubble.tsx) (unused import removed)
+- [skillgauge/package.json](skillgauge/package.json) (scripts + deps)
+- [skillgauge/tsconfig.json](skillgauge/tsconfig.json) (types)
+
+### Notable gotchas encountered
+
+1. **Node 24 + jsdom localStorage conflict** — Node 24 ships an experimental global `localStorage` that lacks `clear` / `removeItem`. It shadowed jsdom's full Storage. Solved with a `MemoryStorage` polyfill forced via `Object.defineProperty` in [setup.ts](skillgauge/app/test/setup.ts).
+2. **`DataTransfer` missing in jsdom 29** — Normal way to build a `FileList` in tests is via `new DataTransfer()`. Not available. Relaxed zod schema to accept any `ArrayLike<File>` (duck-typed), which also makes schemas reusable from non-browser contexts.
+3. **@vitejs/plugin-react peer mismatch** — Latest v6 requires Vite 8; pinned to `^5` for current Vite 7 stack.
+4. **React Router vite plugin + vitest** — Kept vitest config separate from `vite.config.ts` so vitest doesn't try to boot React Router's dev server runtime.
+
+---
+
+## Phase 0b — Next.js App Router Migration ✓
+
+### Goals
+- ✓ Replace React Router 7 with Next.js 16 App Router
+- ✓ Swap Vitest for Jest (`next/jest`) and re-author 20 tests
+- ✓ Create ARCHITECTURE.md with mermaid diagrams + entry points
+- ✓ Delete skillgauge/ once migration was green
+- ✓ Update CI + README to point at web/
+
+### Final verification (2026-04-19)
+
+| Command | Status |
+|---|---|
+| `npx tsc --noEmit` | ✓ clean |
+| `npm test` (Jest) | ✓ 20/20 tests pass across 5 files (~27s) |
+| `npm run build` | ✓ 4 static routes built (compile 4.4s, TS 5.5s) |
+| `npm run dev` + smoke curl | ✓ `/`, `/setup`, `/interview` → 200; `/bogus` → 404 |
+
+### Changelog
+
+- **2026-04-19** — Phase 0b complete. Deleted `skillgauge/` RR7 app. Updated [.github/workflows/ci.yml](.github/workflows/ci.yml) to build `web/`, updated [README.md](README.md) to point at `web/`, added [ARCHITECTURE.md](ARCHITECTURE.md).
+- **2026-04-19** — All 20 ported tests green under Jest. Next build green. Dev server smoke test green.
+- **2026-04-19** — Ported pages + layouts: `app/layout.tsx`, `app/providers.tsx`, `app/page.tsx`, `app/setup/page.tsx`, `app/interview/page.tsx`, `app/not-found.tsx`, `app/error.tsx`. Swapped `useNavigate` → `useRouter`, `useLocation` → `usePathname`.
+- **2026-04-19** — Ported features with `"use client"` pragmas where hooks/event handlers required: `AuthModal`, `SessionSetupForm`, `AnswerInput`. Static presentational components (`MessageBubble`, `InterviewHeader`, `InterviewSidebar`, `TypingIndicator`, `InterviewLayout`) stay server components.
+- **2026-04-19** — Merged `skillgauge/app/styles/app.css` theme into `web/app/globals.css` (Tailwind 4 `@theme` tokens, animations, sidebar color).
+- **2026-04-19** — Ported 6 shadcn primitives, both hooks, both zod schemas, `lib/utils.ts`, `lib/queryClient.ts`, `services/api.ts`. Changed empty-interface shims to type aliases to satisfy ESLint `no-empty-object-type`.
+- **2026-04-19** — Set up Jest via `next/jest` with `moduleNameMapper: { "^@/(.*)$": "<rootDir>/$1" }` and same MemoryStorage polyfill from Phase 0a in `jest.setup.ts`.
+- **2026-04-19** — Moved `themeColor` from `metadata` to `viewport` export (Next 16 requirement).
+- **2026-04-19** — Pinned `turbopack.root` in `next.config.ts` to silence multiple-lockfile warning.
+- **2026-04-19** — Scaffolded `web/` via `create-next-app` (Next 16.2.4, TS, Tailwind 4, App Router, `@/*` alias).
+
+### Files created
+
+- [ARCHITECTURE.md](ARCHITECTURE.md)
+- `web/` — entire Next.js app (all files)
+
+### Files deleted
+
+- `skillgauge/` — entire RR7 app
+
+### Files modified
+
+- [.github/workflows/ci.yml](.github/workflows/ci.yml) — working-directory + build steps point at `web/`
+- [README.md](README.md) — tech stack + run commands point at `web/`
+- [PROGRESS.md](PROGRESS.md) — this phase
+
+### Notable gotchas encountered
+
+1. **`lucide-react` peer pin** — `create-next-app` wrote `"lucide-react": "^1.8.0"`, but Next/React 19 compatibility required the current major. Kept what was installed; icons rendered correctly in the build.
+2. **`create-next-app` npm install crash** — A pnpm-shadowed `npm@9.9.3` under `C:\Users\kunayan\node_modules\.pnpm\` failed mid-install (`Cannot find module 'semver/functions/satisfies'`). Ran system npm (`/c/Program Files/nodejs/npm install`) directly to recover.
+3. **`themeColor` in `metadata`** — Next 16 emits a warning and ignores it; must live on the separate `viewport` export.
+4. **ESLint `no-empty-object-type`** — Ported shadcn primitives used `interface X extends React.X {}`. Rewrote as `type X = React.X` to pass strict lint.
+5. **Turbopack lockfile confusion** — Next picked a parent `pnpm-lock.yaml` as root. Pinned `turbopack.root` in `next.config.ts` to `web/`.
+
+---
+
+## Phase 1 — Real Backend w/ Stubbed AI ✓
+
+### Goals
+- ✓ Stand up a real HTTP API in [backend/](backend/) (Fastify + TypeScript)
+- ✓ Persist users / sessions / messages in MongoDB (official `mongodb` driver; pivoted 2026-04-19)
+- ✓ Replace localStorage auth with httpOnly JWT cookie + `GET /api/me`
+- ✓ Introduce `LLMClient` abstraction with a deterministic `stubClient`
+- ✓ Swap [web/services/api.ts](web/services/api.ts) from in-process mock → real `fetch`
+- ✓ Extend CI to build + test both `web/` and `backend/` in parallel
+- ✓ Apply top findings from the Phase 0b code-duplication audit (storage keys, accept-attr constant)
+- ✓ Minimal external dependency — MongoDB (local docker or Atlas M0 free tier); `stubClient` is in-process; tests use `mongodb-memory-server` (zero deps)
+
+### Checklist
+- [x] `backend/` scaffold: `package.json`, `tsconfig.json` (CJS + Node resolve + `@/*` paths), `jest.config.ts`, `.env.example`
+- [x] [backend/src/config/env.ts](backend/src/config/env.ts) — zod-validated env schema (dev fallback for `JWT_SECRET`, fatal in prod)
+- [x] [backend/src/db/connection.ts](backend/src/db/connection.ts) — `MongoClient` singleton + `getDb()` / `closeDb()` (reads `process.env.MONGODB_URI` at call time so tests can swap URIs)
+- [x] [backend/src/db/indexes.ts](backend/src/db/indexes.ts) — idempotent `createIndex` for `users.email` unique, `sessions.userId`, `messages.sessionId`, partial-unique `messages.{sessionId, questionIndex}` (enforces one question per slot at the storage layer)
+- [x] Repos: [users.ts](backend/src/db/repos/users.ts), [sessions.ts](backend/src/db/repos/sessions.ts), [messages.ts](backend/src/db/repos/messages.ts) — all async, camelCase fields, UUID string `_id`
+- [x] [backend/src/llm/LLMClient.ts](backend/src/llm/LLMClient.ts) + [stubClient.ts](backend/src/llm/stubClient.ts) + [index.ts](backend/src/llm/index.ts) factory on `LLM_PROVIDER`
+- [x] [backend/src/plugins/auth.ts](backend/src/plugins/auth.ts) — `signSessionToken`, `setSessionCookie` (httpOnly / sameSite=lax / secure in prod), `requireAuth` preHandler
+- [x] [backend/src/modules/auth/](backend/src/modules/auth/) — schema + service (`AuthError`) + routes (register / login / logout / me)
+- [x] [backend/src/modules/sessions/](backend/src/modules/sessions/) — schema + service (`loadOwnedSession`) + routes (init / get question / submit answer)
+- [x] [backend/src/modules/health/health.routes.ts](backend/src/modules/health/health.routes.ts) — `GET /api/health`
+- [x] [backend/src/app.ts](backend/src/app.ts) — `buildApp()` factory (separate from `listen` for `app.inject()` in tests)
+- [x] [backend/src/index.ts](backend/src/index.ts) — bootstrap with migrate-on-boot
+- [x] Tests: [auth.test.ts](backend/tests/auth.test.ts) (6) + [sessions.test.ts](backend/tests/sessions.test.ts) (5), per-suite `mongodb-memory-server` via [mongoHarness.ts](backend/tests/mongoHarness.ts); DB dropped between tests
+- [x] [backend/tsconfig.build.json](backend/tsconfig.build.json) + main `tsconfig.json` split — main typechecks `src/` + `tests/`; build excludes `tests/` and writes `dist/` from `rootDir: src` only
+- [x] FE: [web/services/api.ts](web/services/api.ts) rewritten — real `fetch` with `credentials: "include"`, `ApiError`, new exports `fetchMe`, `logoutUser`, updated `initializeSession`/`submitAnswer` shapes
+- [x] FE: [web/hooks/useAuth.ts](web/hooks/useAuth.ts) rewritten — `useQuery({ queryFn: fetchMe })` replaces localStorage hydration; `logoutMutation` clears react-query cache
+- [x] FE: [web/hooks/useSession.ts](web/hooks/useSession.ts) rewritten — single-tick atomic append of `[answer, feedback, next]` from backend's batched answer response
+- [x] FE: [web/lib/storageKeys.ts](web/lib/storageKeys.ts) + `ACCEPTED_RESUME_ACCEPT_ATTR` in [sessionSetupSchema.ts](web/features/session-setup/sessionSetupSchema.ts) (audit #1 + #2)
+- [x] FE: [SessionSetupForm](web/features/session-setup/SessionSetupForm.tsx) reads resume via `FileReader` and stashes `{resumeFileName, resumeContent}` JSON in sessionStorage; [/interview page](web/app/interview/page.tsx) parses it and passes real bytes to `initializeSession`
+- [x] FE: [web/.env.local.example](web/.env.local.example) added (`NEXT_PUBLIC_API_BASE_URL`)
+- [x] FE tests: [useAuth.test.tsx](web/hooks/useAuth.test.tsx) + [useSession.test.tsx](web/hooks/useSession.test.tsx) rewritten to mock `@/services/api` directly; 5 + 4 tests
+- [x] CI: [.github/workflows/ci.yml](.github/workflows/ci.yml) rewritten — two parallel jobs (`web`, `backend`) each running install → typecheck → test → build
+- [x] Explanatory comments added where non-obvious (FE hooks, services, interview page; backend plugins, services, schema, stubClient)
+
+### Final verification (2026-04-19)
+
+| Command | Status |
+|---|---|
+| `cd backend && npx tsc --noEmit` | ✓ clean |
+| `cd backend && npm test` | ✓ 11/11 tests pass (auth + sessions) |
+| `cd backend && npm run build` | ✓ `dist/` emitted |
+| `cd backend && npm run migrate` | ✓ idempotent, runs `ensureIndexes()` against `MONGODB_URI` |
+| `cd web && npx tsc --noEmit` | ✓ clean |
+| `cd web && npm test -- --ci` | ✓ 21/21 tests pass (up from 20 — added register-error case) |
+| `cd web && npm run build` | ✓ 4 static routes built |
+
+### Changelog
+
+- **2026-04-19** — Phase 1 complete. ARCHITECTURE.md, PROGRESS.md, IMPLEMENTATION_STATUS.md updated to reflect real backend.
+- **2026-04-19** — CI rewritten to two parallel jobs; each job runs install → typecheck → test → build in its working directory.
+- **2026-04-19** — FE tests rewritten: `jest.mock("@/services/api")` with typed `MockedFunction`s. Logout test models cookie-cleared → `/me` 401 → null user.
+- **2026-04-19** — FE `useSession` collapses the old init → getNextQuestion chain: `POST /api/sessions` now returns `{ session, firstQuestion }` atomically. `submitAnswer` returns `{ answerMsg, feedback, nextQuestion, isComplete }` → single-tick state append avoids flicker.
+- **2026-04-19** — FE `useAuth` rewritten around `useQuery({ queryFn: fetchMe })` — no localStorage, no hydration flag. `logout` calls backend then `queryClient.clear()`.
+- **2026-04-19** — [web/services/api.ts](web/services/api.ts) rewritten end-to-end with real `fetch`, `credentials: "include"`, `ApiError`, centralized `apiFetch<T>`. `API_BASE` = `process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000"`.
+- **2026-04-19** — Resume data flow: setup form `FileReader.readAsText` → JSON in sessionStorage → interview page `JSON.parse` → pass real bytes to `POST /api/sessions`. Replaces old pattern of synthesizing a fake session_id client-side.
+- **2026-04-19** — Audit #1 + #2 applied: `STORAGE_KEYS` constant in [web/lib/storageKeys.ts](web/lib/storageKeys.ts), `ACCEPTED_RESUME_ACCEPT_ATTR` exported from [sessionSetupSchema.ts](web/features/session-setup/sessionSetupSchema.ts).
+- **2026-04-19** — Backend routes: `/api/auth/{register,login,logout}`, `/api/me`, `/api/sessions`, `/api/sessions/:id/questions/:index`, `/api/sessions/:id/answers`. All session routes protected with `app.addHook("preHandler", requireAuth)`.
+- **2026-04-19** — Session ownership centralized in `loadOwnedSession(userId, sessionId)` — 403 if mismatch. Question fetch is idempotent via `(session_id, type='question', question_index)` index — page refresh or race doesn't burn an LLM call.
+- **2026-04-19** — `stubClient`: picks from 5 canned questions indexed by `questionIndex`, scores answers by length bucket with fixed strengths/improvements. Matches Phase 0b mock behavior so FE contract stays stable.
+- **2026-04-19** — `LLMClient` interface with `generateQuestion(ctx)` + `gradeAnswer(q, a, ctx)`. Factory switches on `LLM_PROVIDER` (`stub` today; `openai`/`anthropic` throw "not implemented" — Phase 2 hook).
+- **2026-04-19** — Auth plugin: JWT `{ sub: userId }`, HS256, 7-day expiry. Cookie `skillgauge_session`, httpOnly, sameSite=lax, secure in prod, path=/. `requireAuth` preHandler verifies + loads user onto `request.user`; 401 on missing/expired/tampered cookie.
+- **2026-04-19** — **Pivoted Phase 1 persistence from SQLite to MongoDB.** Dropped `better-sqlite3` + `@types/better-sqlite3`; added `mongodb@^7.1.1` + `mongodb-memory-server@^11.0.1` (dev). Rewrote `db/connection.ts` as a `MongoClient` singleton, replaced `migrate.ts` with `indexes.ts` (idempotent `createIndex`), converted all repos + services to async, switched tests to a per-suite `mongodb-memory-server` harness. `env.ts`: `DATABASE_URL` → `MONGODB_URI` + `MONGODB_DB`. FE unchanged — same wire contract, same UUID string IDs. Split `tsconfig.build.json` so `rootDir: src` stays clean for `dist/` while the main tsconfig typechecks tests too.
+- **2026-04-19** — DB schema (Mongo): collections `users`, `sessions`, `messages` — UUID strings as `_id`, camelCase fields. Indexes: `users.email` unique, `sessions.userId`, `messages.sessionId`, partial-unique `messages.{sessionId, questionIndex}` (enforces idempotent question slots at the storage layer; prior SQL version used a composite index + app-level check).
+- **2026-04-19** — Scaffolded `backend/` with Fastify 5.8.5, @fastify/cookie 11.0.2, @fastify/cors 11.2.0, bcryptjs 3.0.3, jsonwebtoken 9.0.3, zod 4.3.6, dotenv 17.4.2, `mongodb` 7.1.1; dev Jest 30 + ts-jest 29 + tsx 4 + `mongodb-memory-server` 11.0.1.
+
+### Files created
+
+**backend (new):**
+- [backend/package.json](backend/package.json), [backend/tsconfig.json](backend/tsconfig.json), [backend/jest.config.ts](backend/jest.config.ts), [backend/.env.example](backend/.env.example)
+- [backend/src/config/env.ts](backend/src/config/env.ts)
+- [backend/src/shared/types.ts](backend/src/shared/types.ts)
+- [backend/src/db/connection.ts](backend/src/db/connection.ts), [indexes.ts](backend/src/db/indexes.ts), [repos/users.ts](backend/src/db/repos/users.ts), [repos/sessions.ts](backend/src/db/repos/sessions.ts), [repos/messages.ts](backend/src/db/repos/messages.ts)
+- [backend/src/llm/LLMClient.ts](backend/src/llm/LLMClient.ts), [stubClient.ts](backend/src/llm/stubClient.ts), [index.ts](backend/src/llm/index.ts)
+- [backend/src/plugins/auth.ts](backend/src/plugins/auth.ts)
+- [backend/src/modules/auth/auth.schema.ts](backend/src/modules/auth/auth.schema.ts), [auth.service.ts](backend/src/modules/auth/auth.service.ts), [auth.routes.ts](backend/src/modules/auth/auth.routes.ts)
+- [backend/src/modules/sessions/sessions.schema.ts](backend/src/modules/sessions/sessions.schema.ts), [sessions.service.ts](backend/src/modules/sessions/sessions.service.ts), [sessions.routes.ts](backend/src/modules/sessions/sessions.routes.ts)
+- [backend/src/modules/health/health.routes.ts](backend/src/modules/health/health.routes.ts)
+- [backend/src/app.ts](backend/src/app.ts), [backend/src/index.ts](backend/src/index.ts)
+- [backend/tests/setup.ts](backend/tests/setup.ts), [mongoHarness.ts](backend/tests/mongoHarness.ts), [auth.test.ts](backend/tests/auth.test.ts), [sessions.test.ts](backend/tests/sessions.test.ts)
+- [backend/tsconfig.build.json](backend/tsconfig.build.json)
+
+**web (new):**
+- [web/lib/storageKeys.ts](web/lib/storageKeys.ts)
+- [web/.env.local.example](web/.env.local.example)
+
+### Files modified
+
+**web:**
+- [web/services/api.ts](web/services/api.ts) — full rewrite to real HTTP
+- [web/hooks/useAuth.ts](web/hooks/useAuth.ts) — `useQuery` on `/me`, no localStorage
+- [web/hooks/useSession.ts](web/hooks/useSession.ts) — batched answer response consumer
+- [web/hooks/useAuth.test.tsx](web/hooks/useAuth.test.tsx) — rewritten around `jest.mock("@/services/api")`
+- [web/hooks/useSession.test.tsx](web/hooks/useSession.test.tsx) — same
+- [web/features/session-setup/sessionSetupSchema.ts](web/features/session-setup/sessionSetupSchema.ts) — adds `ACCEPTED_RESUME_ACCEPT_ATTR`
+- [web/features/session-setup/SessionSetupForm.tsx](web/features/session-setup/SessionSetupForm.tsx) — imports `STORAGE_KEYS`, adds `readFileAsText` helper, stashes JSON payload
+- [web/app/interview/page.tsx](web/app/interview/page.tsx) — reads STORAGE_KEYS, `JSON.parse` resume payload
+- [.github/workflows/ci.yml](.github/workflows/ci.yml) — two parallel jobs for `web/` + `backend/`
+
+**docs:**
+- [ARCHITECTURE.md](ARCHITECTURE.md) — expanded to cover full stack; §4 system context now solid to backend; added backend module map, HTTP surface, DB schema, auth model, LLM abstraction, env/local-dev section, per-phase external-credentials table
+- [PROGRESS.md](PROGRESS.md) — this section
+- [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) — reflects real backend exists
+
+### External credentials / endpoints needed
+
+**Phase 1: MongoDB only.** Either run local (`docker run -d -p 27017:27017 mongo:7`) or point `MONGODB_URI` at a MongoDB Atlas M0 free-tier cluster. No API keys. `stubClient` is in-process. Tests require nothing (spin up disposable mongod via `mongodb-memory-server`).
+
+What you *will* need in later phases is documented in [ARCHITECTURE.md §21](ARCHITECTURE.md).
+
+### Notable gotchas encountered
+
+1. **Mongo driver is async-all-the-way** — switching from `better-sqlite3` (sync) meant every repo call became `await`-ed. Propagated through auth.service + sessions.service, including `loadOwnedSession` which became async. FE wire contract unaffected.
+2. **Env late-binding in `db/connection.ts`** — `env.ts` runs at import time, but `mongodb-memory-server` chooses its URI after `beforeAll(startMongo)`. Fixed by reading `process.env.MONGODB_URI` directly at call time in `getDb()` (falling back to the parsed `env` object), so the test harness can set env before `buildApp()` triggers the first connection.
+3. **Per-suite `mongodb-memory-server`, not globalSetup** — Jest globalSetup env writes don't reach worker processes. Pattern: `beforeAll(startMongo)` / `afterAll(stopMongo)` in each describe, and `beforeEach(resetDb → buildApp)` / `afterEach(app.close)`. One mongod per test file; DB dropped between tests (cheaper than restarting mongod).
+4. **UUID strings as `_id`, not `ObjectId`** — keeps the wire contract identical to Phase 0b (opaque string IDs), so no FE migration needed.
+5. **Idempotency via partial unique index** — prior SQL version used `(session_id, type, question_index)` + app check. Mongo version uses `{ sessionId, questionIndex }` unique with `partialFilterExpression: { type: "question", questionIndex: { $exists: true } }`, so the storage layer enforces "at most one question per slot" and the service can rely on `findOne`/`insertOne` without a race window.
+6. **TS6059 rootDir conflict** — after adding `tests/mongoHarness.ts`, `rootDir: "src"` + `include: ["src/**/*", "tests/**/*"]` surfaced the tests-are-outside-rootDir error. Fixed by splitting: main `tsconfig.json` drops `rootDir` + `outDir` and is `noEmit`; new `tsconfig.build.json` sets `rootDir: "src"` + `outDir: "dist"` for `npm run build`.
+7. **`@types/bcryptjs` is deprecated** — bcryptjs 3.x ships its own types. No `@types` dep.
+8. **TS2688 "Cannot find type definition file for 'prop-types'"** — a global types leak from the user's home `node_modules`. Fixed by pinning `"types": ["node", "jest"]` in `backend/tsconfig.json`.
+9. **`import.meta` rejected by CommonJS** — `indexes.ts` uses `if (require.main === module)` for CLI-mode detection (carried over from the old migrate.ts).
+10. **Native `localStorage` is gone from the FE auth path** — `useAuth` test models "cookie cleared → /me 401 → user is null" by resolving `fetchMe` to `null` before `logout()` and awaiting the query.
+11. **CORS + credentials** — `@fastify/cors` with `credentials: true` rejects `origin: "*"`. `CORS_ORIGIN` must be an explicit origin (or comma-separated list).
+12. **Cookie `secure` flag** — set only in `NODE_ENV=production` so localhost testing works without HTTPS. `sameSite=lax` degrades cleanly across tabs.
+13. **Test timeout bumped to 60s** — `mongodb-memory-server` downloads a ~60MB mongod binary on first run per machine; subsequent runs are fast.
+
+---
+
+---
+
+## Phase 1.1 — UX Enhancements ✓
+
+Pre-Phase-2 polish based on user-driven UI feedback. All FE-only (plus stub + schema extensions) — backend keeps the same contract shape with additive fields. No new external dependencies besides `next-themes`.
+
+### Goals
+- ✓ Dark-mode toggle with system-default detection
+- ✓ Clickable brand + home button that correctly reroute to `/` with a confirm guard if an interview is in progress
+- ✓ Surface the current resume (filename + text preview) in the interview sidebar
+- ✓ Guard against swapping resume mid-session — archive the snapshot locally and alert the user before starting a new one
+- ✓ Richer setup inputs: interview style, difficulty, role level, question count, focus areas — wired through to the stub so branches are observable today
+- ✓ Keep FE + BE test suites green and the backend wire contract forward-compatible with Phase 2's real LLM
+
+### Checklist
+- [x] [web/app/providers.tsx](web/app/providers.tsx) — wrap tree in `next-themes` `ThemeProvider` (attribute="class", system default, `disableTransitionOnChange`)
+- [x] [web/app/layout.tsx](web/app/layout.tsx) — `<html suppressHydrationWarning>` to silence next-themes hydration warning
+- [x] [web/app/globals.css](web/app/globals.css) — Tailwind 4 `@custom-variant dark`; dark-mode CSS var palette under `.dark`
+- [x] [web/components/ThemeToggle.tsx](web/components/ThemeToggle.tsx) — mounted-gated Sun/Moon toggle (reusable)
+- [x] [web/components/AppLayout.tsx](web/components/AppLayout.tsx) — brand wrapped in `<button>` with `aria-label="Go home"`, ThemeToggle in header
+- [x] [web/features/interview/InterviewHeader.tsx](web/features/interview/InterviewHeader.tsx) — rightmost home button + ThemeToggle; confirmation dialog when session is active
+- [x] [web/features/interview/InterviewSidebar.tsx](web/features/interview/InterviewSidebar.tsx) — brand-as-home-button; resume card with filename + "View" modal showing the text snapshot; single active-session entry
+- [x] [web/app/interview/page.tsx](web/app/interview/page.tsx) — reads `STORAGE_KEYS.session.options` in the init effect; clears `STORAGE_KEYS.session.active` on completion; passes `resumeFileName`/`isActive` down to sidebar+header
+- [x] [web/features/session-setup/sessionSetupSchema.ts](web/features/session-setup/sessionSetupSchema.ts) — new enums `INTERVIEW_STYLES`, `DIFFICULTY_LEVELS`, `ROLE_LEVELS`, `QUESTION_COUNTS`; enum-of-strings for `questionCount` + transform to number; split `SessionSetupFormInput` / `SessionSetupFormValues` to keep RHF's pre-transform type clean
+- [x] [web/features/session-setup/SessionSetupForm.tsx](web/features/session-setup/SessionSetupForm.tsx) — native `<select>` inputs for style/difficulty/role/count, optional `focusAreas` text input; writes `STORAGE_KEYS.session.options` and `STORAGE_KEYS.session.active`; Dialog-based archive-confirm before overwriting an active session
+- [x] [web/lib/storageKeys.ts](web/lib/storageKeys.ts) — added `options`, `archived`, `active` keys
+- [x] [web/services/api.ts](web/services/api.ts) — added `InterviewStyle` / `DifficultyLevel` / `RoleLevel` / `SessionOptions` types; `SessionInitRequest extends SessionOptions`
+- [x] [backend/src/shared/types.ts](backend/src/shared/types.ts) — mirror the new enums; extend `SessionInitRequest`
+- [x] [backend/src/modules/sessions/sessions.schema.ts](backend/src/modules/sessions/sessions.schema.ts) — add enum fields + `questionCount` refinement against the tuple
+- [x] [backend/src/db/repos/sessions.ts](backend/src/db/repos/sessions.ts) — store `interviewStyle`, `difficulty`, `roleLevel`, `focusAreas` on the session doc
+- [x] [backend/src/llm/LLMClient.ts](backend/src/llm/LLMClient.ts) — extend `QuestionContext` with the same four options
+- [x] [backend/src/llm/stubClient.ts](backend/src/llm/stubClient.ts) — replace single-bank flat array with behavioral / technical-by-difficulty banks + mixed interleave + role-level suffix; length-proxy score now scales by difficulty. **Removed** `STUB_TOTAL_QUESTIONS` export — total now comes from `request.questionCount`.
+- [x] [backend/src/modules/sessions/sessions.service.ts](backend/src/modules/sessions/sessions.service.ts) — `totalQuestions = request.questionCount`, new `titleFor()` builds "Mid Mixed Interview" etc., `ctxFromSession()` helper threads the new fields through every LLM call
+- [x] [backend/tests/sessions.test.ts](backend/tests/sessions.test.ts) — updated payloads; added tests for invalid interview style (400) and difficulty=hard question selection
+- [x] [web/features/session-setup/sessionSetupSchema.test.ts](web/features/session-setup/sessionSetupSchema.test.ts) — added coverage for unsupported question count + invalid interview style
+
+### Final verification (2026-04-20)
+
+| Command | Status |
+|---|---|
+| `cd backend && npx tsc --noEmit` | ✓ clean |
+| `cd backend && npm test` | ✓ 13/13 tests pass (11 Phase 1 + 2 new) |
+| `cd backend && npm run build` | ✓ `dist/` emitted |
+| `cd web && npx tsc --noEmit` | ✓ clean |
+| `cd web && npm test -- --ci` | ✓ 23/23 tests pass (21 Phase 1 + 2 new schema cases) |
+| `cd web && npm run build` | ✓ 4 static routes built |
+
+### Changelog
+
+- **2026-04-20** — Phase 1.1 complete. ARCHITECTURE.md, PROGRESS.md, IMPLEMENTATION_STATUS.md updated to reflect the new UX surface + backend contract.
+- **2026-04-20** — stubClient reorganized: three banks (behavioral, technical-by-difficulty, mixed = interleaved). `ROLE_SUFFIX` map appended only to non-behavioral questions so behavioral prompts stay natural. Length-proxy score divisor now scales with difficulty (`easy:10, medium:15, hard:25`). `STUB_TOTAL_QUESTIONS` export removed — no caller depended on it outside tests.
+- **2026-04-20** — `sessions.service.initialize()` now sets `totalQuestions` from the request, titles via `${RoleLabel} ${StyleLabel} Interview`. All `generateQuestion` / `gradeAnswer` callers pass the enriched context via `ctxFromSession()` — keeps the shape in one place.
+- **2026-04-20** — Session doc persists `interviewStyle`, `difficulty`, `roleLevel`, `focusAreas` so Phase 2's real provider can reconstruct the same prompt without re-reading the request payload.
+- **2026-04-20** — Sidebar + header now treat "in progress" as a FE flag (`STORAGE_KEYS.session.active`). Flag is set by the setup form, cleared when `isComplete` flips true or the user confirms leaving. Backend is unaware — it's purely a nav guard.
+- **2026-04-20** — Archive-on-swap: the setup form intercepts submit when a prior session is still marked active, shows a Dialog, and writes the previous snapshot metadata (resume + JD + options) into a `archived_sessions` array on `localStorage`. The real session + messages remain on the backend; a Phase 3 `GET /api/sessions` list will surface them properly.
+- **2026-04-20** — Tailwind 4 dark-mode: uses `@custom-variant dark (&:where(.dark, .dark *))` to hook into next-themes' `class="dark"` toggle on `<html>`. Palette defined as CSS variables under `.dark {}` so Radix + shadcn components swap without code changes.
+- **2026-04-20** — `questionCount` in the FE schema is now `z.enum(["3","5","7","10"]).transform(Number)`. Input type (what RHF holds) stays string; output type is a narrowed number union. This keeps `zodResolver<Input, _, Output>` happy with a native `<select>`.
+
+### Files created / changed
+
+**FE (new):**
+- [web/components/ThemeToggle.tsx](web/components/ThemeToggle.tsx)
+
+**FE (changed):**
+- [web/app/layout.tsx](web/app/layout.tsx), [web/app/providers.tsx](web/app/providers.tsx), [web/app/globals.css](web/app/globals.css)
+- [web/app/interview/page.tsx](web/app/interview/page.tsx)
+- [web/components/AppLayout.tsx](web/components/AppLayout.tsx)
+- [web/features/interview/InterviewHeader.tsx](web/features/interview/InterviewHeader.tsx), [InterviewSidebar.tsx](web/features/interview/InterviewSidebar.tsx)
+- [web/features/session-setup/SessionSetupForm.tsx](web/features/session-setup/SessionSetupForm.tsx), [sessionSetupSchema.ts](web/features/session-setup/sessionSetupSchema.ts), [sessionSetupSchema.test.ts](web/features/session-setup/sessionSetupSchema.test.ts)
+- [web/hooks/useSession.test.tsx](web/hooks/useSession.test.tsx)
+- [web/lib/storageKeys.ts](web/lib/storageKeys.ts)
+- [web/services/api.ts](web/services/api.ts)
+
+**BE (changed):**
+- [backend/src/shared/types.ts](backend/src/shared/types.ts)
+- [backend/src/llm/LLMClient.ts](backend/src/llm/LLMClient.ts), [stubClient.ts](backend/src/llm/stubClient.ts)
+- [backend/src/db/repos/sessions.ts](backend/src/db/repos/sessions.ts)
+- [backend/src/modules/sessions/sessions.schema.ts](backend/src/modules/sessions/sessions.schema.ts), [sessions.service.ts](backend/src/modules/sessions/sessions.service.ts)
+- [backend/tests/sessions.test.ts](backend/tests/sessions.test.ts)
+
+### Notable gotchas
+1. Next.js warns about hydration mismatch when `next-themes` toggles `class="dark"` before React hydrates — fix is `suppressHydrationWarning` on `<html>`, not `<body>`.
+2. Tailwind 4 dropped the classic `darkMode: "class"` config — you opt in per stylesheet with `@custom-variant dark (&:where(.dark, .dark *))`.
+3. `z.coerce.number().refine(narrow)` poisons `z.input<>` to `unknown`, which breaks `useForm<Input, _, Output>`. Enum-of-strings + `.transform(Number)` is the clean escape hatch.
+4. RHF's `useForm<Input, Context, Output>` triple is only required once you introduce a transforming resolver — worth knowing before adding more coerced fields in Phase 2.
+5. The sidebar shows the resume *text snapshot* (what was sent to the backend), not the original PDF/DOC. When Phase 4 adds object storage, swap the Dialog body to an `<iframe>` pointed at the signed URL.
+
+---
+
+## Phase 1.5 — Auth Hardening (pending)
+
+Bridges Phase 1 → Phase 2. Keeps all work local, no external keys. Small, mergeable chunks.
+
+### 1.5a — JWT login polish (**starts here**)
+- [ ] Verify cookie flags end-to-end in prod simulation (`secure`, `sameSite=lax`, `httpOnly`, `path=/`)
+- [ ] Normalize error shapes across `/api/auth/*` → `{ code, message }` so FE can branch without parsing strings
+- [ ] Add `POST /api/auth/login` failure logging (rate + email hash, never the password)
+- [ ] Extract `JWT_TTL_DAYS` to env (currently hardcoded 7d)
+- [ ] Add jest case: expired token → 401 on `/api/me`
+- **Why first:** confirms the Phase 1 auth surface is truly solid before building more on top of it.
+
+### 1.5b — Password reset flow
+- [ ] `POST /api/auth/password/reset-request` → opaque 200 (no user enumeration), stores single-use token hash + TTL in a new `password_reset_tokens` table
+- [ ] `POST /api/auth/password/reset-confirm` → consumes token, bcrypts new password, invalidates existing sessions (rotate `jwt_epoch` column on user)
+- [ ] FE: "Forgot password?" link in `AuthModal`, dedicated `/reset` route
+- [ ] Dev: log reset link to stdout (no mail provider yet). Production mail goes in Phase 4.
+
+### 1.5c — Auth rate limiting + lockout
+- [ ] Plugin: per-IP rate limit on `/api/auth/login` and `/reset-request` (e.g., 10/min)
+- [ ] Per-email failure counter → soft lockout after N consecutive failures in a window
+- [ ] Add tests for both
+
+### 1.5d — Session rotation
+- [ ] `jwt_epoch` column on `users`; every token signs with current epoch, `requireAuth` rejects if stale
+- [ ] Logout-everywhere button in a (minimal) settings page → increments epoch
+- [ ] Rotate epoch on password change
+
+### 1.5e — Schema/contract cleanup
+- [ ] Extract shared request/response zod schemas into `backend/src/shared/contracts.ts` (import from both routes and services)
+- [ ] Remove any remaining implicit `any` in service return types
+- [ ] Top-of-file comments on new plugins
+
+**Exit criteria for Phase 1.5:** all five sub-phases green; backend + web CI green; no new external dependency; [ARCHITECTURE.md §9](ARCHITECTURE.md) auth section updated.
+
+---
+
+## Phase 2 — AI Intelligence w/ Provider-Agnostic LLMClient (pending, sub-parted)
+
+Each sub-phase is a self-contained PR. `stubClient` keeps working at every step so `main` is never broken.
+
+### 2a — OpenAI provider behind `LLMClient`
+- [ ] `backend/src/llm/openaiClient.ts` implementing `LLMClient`
+- [ ] Factory switch on `LLM_PROVIDER=openai`
+- [ ] Env: `OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-4o-mini`)
+- [ ] Timeout + single retry on transient 5xx
+- [ ] Unit test with mocked `fetch` (no real calls in CI)
+- **External credentials needed:** OpenAI API key.
+
+### 2b — Prompt templates + versioning
+- [ ] `backend/src/llm/prompts/v1/{generateQuestion,gradeAnswer}.ts` — template + version tag
+- [ ] `prompt_version` column on `messages` — every question/feedback records which prompt produced it
+- [ ] Golden fixtures for deterministic-temperature grading checks
+
+### 2c — Resume + JD parsing
+- [ ] PDF parser (`pdf-parse` or similar) + DOCX parser (`mammoth`) → plain text
+- [ ] Chunk + normalize pipeline in `backend/src/modules/sessions/ingest.ts`
+- [ ] Replace raw `resumeContent` write with parsed+normalized text
+- [ ] Tests with fixture files
+
+### 2d — Cost + rate guards
+- [ ] Per-user daily token/call quota (Mongo counter doc, TTL-reset)
+- [ ] Short-circuit abusive input length before calling the LLM
+- [ ] 402/429 distinct error codes in response
+
+### 2e — Alternate provider (Anthropic) + regression suite
+- [ ] `anthropicClient.ts` against same interface
+- [ ] Switch test: set `LLM_PROVIDER=anthropic` in CI shadow-job, ensure interview flow still passes
+- [ ] Snapshot-style regression tests over golden prompts (low temperature)
+- **External credentials needed:** Anthropic API key (CI can skip if absent).
+
+**Exit criteria for Phase 2:** all sub-phases green; FE contract unchanged; `LLM_PROVIDER=stub` still works for local dev and tests.
+
+---
+
+## Phase 3 — Long-term Memory & Progress Dashboard (pending)
+
+Broken down when Phase 2 finishes. Preliminary sub-phase sketch:
+- 3a — Harden Mongo persistence (Atlas connection, replica-set config, connection-pool tuning)
+- 3b — Embeddings provider interface (`EmbeddingsClient`)
+- 3c — Vector store (Mongo Atlas Vector Search or Pinecone) + resume/answer indexing
+- 3d — Retrieval plumbed into question generation context
+- 3e — `GET /api/sessions` list + aggregation endpoints
+- 3f — FE `/dashboard` route with trends
+
+---
+
+## Phase 4 — Production Readiness (pending)
+
+Broken down when Phase 3 finishes. Preliminary sub-phase sketch:
+- 4a — E2E Playwright (register → setup → interview → complete)
+- 4b — Observability (Pino log ship + Sentry)
+- 4c — Security headers + CSRF + rate limits (global)
+- 4d — Object storage for resume files
+- 4e — Deploy targets + prod envs (Vercel + Fly.io/Railway)
+- 4f — A11y audit (axe-core)

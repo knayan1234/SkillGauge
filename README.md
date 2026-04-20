@@ -37,15 +37,18 @@ SkillGauge:
 
 ## Tech Stack
 
-**Frontend**
+**Frontend** (lives in [web/](web/))
 
-- React
-- TypeScript
-- Vite
+- Next.js 16 (App Router)
+- React 19 + TypeScript
+- Tailwind CSS 4
+- @tanstack/react-query
+- react-hook-form + zod
+- Jest + React Testing Library
 
-**Backend**
+**Backend** (planned — Phase 1)
 
-- Node.js
+- Node.js API
 - Large Language Models
 - Vector Database
 - Relational / Document Database
@@ -54,7 +57,19 @@ SkillGauge:
 
 ## High-Level Architecture
 
-Frontend communicates with a backend service that handles AI logic, retrieval from long-term memory, and evaluation.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for system diagrams, FE module map, route table, and entry points. That file is updated on every structural change.
+
+---
+
+## Running the app
+
+```bash
+cd web
+npm install
+npm run dev       # http://localhost:3000
+npm test          # Jest (20 unit tests)
+npm run build     # production build
+```
 
 ---
 

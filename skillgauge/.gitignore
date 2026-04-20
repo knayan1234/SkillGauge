@@ -1,8 +1,0 @@
-.DS_Store
-.env
-/node_modules/
-/internal_cookbook/
-
-# React Router
-/.react-router/
-/build/

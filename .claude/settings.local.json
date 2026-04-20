@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"z\\\\\\\\.string\\\\|z\\\\\\\\.object\\\\|z\\\\\\\\.custom\\\\|refine\\\\|validate\" /c/Users/kunayan/Desktop/P-Project/SkillGauge/web/features/auth/authSchema.ts /c/Users/kunayan/Desktop/P-Project/SkillGauge/web/features/session-setup/sessionSetupSchema.ts)"
+    ]
+  }
+}

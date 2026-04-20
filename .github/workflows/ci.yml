@@ -6,12 +6,12 @@ on:
       - "*"
 
 jobs:
-  build:
+  web:
+    name: Web (Next.js)
     runs-on: ubuntu-latest
-
     defaults:
       run:
-        working-directory: skillgauge   # ✅ THIS FIXES EVERYTHING
+        working-directory: web
 
     steps:
       - name: Checkout code
@@ -22,13 +22,46 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: skillgauge/package-lock.json  # ✅ IMPORTANT
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npm test -- --ci
+
+      - name: Build
+        run: npm run build
+
+  backend:
+    name: Backend (Fastify)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Test
+        run: npm test -- --ci
 
       - name: Build
         run: npm run build
