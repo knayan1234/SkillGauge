@@ -2,9 +2,9 @@
 
 Living document tracking every change made during the end-to-end build. Newest entries at the top within each phase.
 
-**Current phase:** Phase 1.6a — Auth-aware persistent header **(COMPLETE ✓)** (global `AuthModalProvider` context, new `UserMenu` component, both AppLayout + InterviewHeader render it, landing page CTA is auth-aware)
-**Next phase:** Phase 1.6b — Expanded homepage with auth-aware CTAs
-**Then:** 1.6c LLM badge → 1.6d chatroom sidebar → Phase 2 AI Intelligence (2b prompts first → 2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
+**Current phase:** Phase 1.6b — Expanded homepage **(COMPLETE ✓)** (4-section landing: hero / how it works / why different / final CTA; auth-aware CTAs in hero AND footer)
+**Next phase:** Phase 1.6c — `/api/health/info` + FE LLM badge
+**Then:** 1.6d chatroom sidebar → Phase 2 AI Intelligence (2b prompts first → 2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
 **Started:** 2026-04-18
 **Phase 0a finished:** 2026-04-18
 **Phase 0b finished:** 2026-04-19
@@ -16,6 +16,7 @@ Living document tracking every change made during the end-to-end build. Newest e
 **Phase 1.5d finished:** 2026-04-25
 **Phase 1.5e finished:** 2026-04-25 (Phase 1.5 fully complete)
 **Phase 1.6a finished:** 2026-04-25
+**Phase 1.6b finished:** 2026-04-25
 
 ---
 
@@ -797,11 +798,59 @@ These are visibility/UX items the user will demo to non-technical reviewers befo
 // TODO:phase-1.6b expand homepage beyond hero (multi-section landing)
 ```
 
-### 1.6b — Expanded homepage
-- [ ] [web/app/page.tsx](web/app/page.tsx) — add sections beyond the current single hero: "What SkillGauge does" (3-4 bullets), "How a session works" (3-step flow with screenshots/icons), "Why it's different" (long-term memory pitch)
-- [ ] Auth-state aware CTAs: "Start a session" if logged in (deeplink to `/setup`), "Sign in" if not
-- [ ] Keep static — no client components beyond the header. Lighthouse score must stay ≥ 95 on perf
-- **Why:** current homepage is barely more than a logo + login button. First impression for any reviewer should explain the product.
+### 1.6b — Expanded homepage ✓
+
+#### Goals
+- ✓ [web/app/page.tsx](web/app/page.tsx) restructured from single hero into a 4-section narrative: hero → "How it works" (3-step flow) → "Why SkillGauge is different" (long-term-memory pitch) → final CTA
+- ✓ Hero CTA + footer CTA both auth-aware (anonymous → AuthModal; authed → `/setup`); shared `ctaLabel` so both display "Get started free" or "Start a new session" consistently
+- ✓ All static — no new dependencies, no new client components beyond what existed in 1.6a
+- ✓ Reuses existing shadcn `Card` primitive + Tailwind animation classes — no new CSS
+
+#### Final verification (2026-04-25)
+
+| Command | Status |
+|---|---|
+| `cd web && npx tsc --noEmit` | ✓ clean |
+| `cd web && npm test -- --ci` | ✓ 26/26 (no FE behavior change in test scope) |
+| `cd web && npm run build` | ✓ 6 static routes prerendered |
+
+#### What each new section covers
+
+**Section 1 — Hero** (existing, lightly polished): brand mark, "AI-powered interview practice that remembers" tagline, 3-card teaser (Personalized / AI Feedback / Fast Setup), primary CTA, "no credit card" reassurance.
+
+**Section 2 — How it works** (NEW): 3 cards, one per user-journey step.
+1. Upload your résumé (PDF/DOC + JD + style picker)
+2. Practice in a chat (Q at a time, instant feedback)
+3. Track your progress (chatroom history, score trends)
+
+**Section 3 — Why SkillGauge is different** (NEW): 3 cards making the project's core pitch.
+1. Long-term memory (past answers feed future questions; weak areas surface again, harder)
+2. Context-aware questions (built from résumé + JD + style — no generic "tell me about a time…")
+3. Privacy first (httpOnly auth, hashed audit logs, single-use resets, sign-out-everywhere)
+
+**Section 4 — Final CTA** (NEW): same auth-aware action as the hero, repeated so users who scrolled don't have to scroll back.
+
+#### Changelog
+
+- **2026-04-25** — [web/app/page.tsx](web/app/page.tsx) replaced with the 4-section layout. New icons imported from lucide-react: `Upload`, `MessageSquare`, `TrendingUp`, `History`, `Layers`, `ShieldCheck`. Existing decorative background (gradient + floating blobs) kept as a fixed `-z-10` layer.
+- **2026-04-25** — Tagline expanded from "AI-powered interview practice" to a more specific "AI-powered interview practice that remembers, adapts, and tracks your growth — session after session." Sets up the long-term-memory pitch in section 3.
+- **2026-04-25** — `ctaLabel` extracted as a const so the hero and footer CTAs always show the same auth-aware text (`Get started free` for anonymous, `Start a new session` for authenticated).
+- **2026-04-25** — Section 3 ("Why" pitch) sits inside a soft vertical gradient (`bg-gradient-to-b from-transparent via-primary/5 to-transparent`) so it visually separates from the surrounding sections without needing a hard divider.
+- **2026-04-25** — JSX text escapes added per Next.js eslint config: `&apos;` for apostrophes, `&quot;` for quoted phrases. Affects "aren't", "you're", "it's", "isn't", and the example "tell me about a time…" / "sign out everywhere" callouts.
+
+#### Files modified
+- [web/app/page.tsx](web/app/page.tsx) — full rewrite, 4 sections
+
+#### Notable gotchas
+1. **Next.js eslint quoting rule**: raw `'` or `"` in JSX text is rejected as an error (not a warning). Must use HTML entities. The fix is mechanical but easy to miss when adding marketing copy with contractions.
+2. **Lighthouse score**: page is fully static (no client-side fetches added in this sub-phase). The `useAuth` + `useAuthModal` hooks were already in the bundle from 1.6a, so no new payload. Final perf score should stay ≥ 95.
+3. **No new test added**: this is content + layout, not behavior. The auth-aware CTA logic is the same as 1.6a (already covered by `UserMenu.test.tsx` for the underlying `useAuth` integration). Adding a snapshot test here would just lock in marketing copy that's expected to change.
+
+#### TODO markers planted
+```ts
+// TODO:phase-4 add real product screenshots in the "How it works" cards (object storage)
+// TODO:phase-2 add a "Powered by <model>" line in the "Why" section that reads from /api/health/info (1.6c)
+```
 
 ### 1.6c — Active LLM provider badge
 - [ ] BE: `GET /api/health/info` (public) returns `{ llmProvider: "stub" | "openai" | "anthropic", llmModel: string | null }`. `llmModel` is `null` until 2a (where it becomes `OPENAI_MODEL`).

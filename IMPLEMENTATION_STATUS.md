@@ -1,6 +1,6 @@
 # SkillGauge Implementation Status
 
-**Current phase:** Phase 1.6a — Auth-aware persistent header **(COMPLETE ✓)** (Phase 1.5 fully complete; 1.6 underway)
+**Current phase:** Phase 1.6b — Expanded homepage **(COMPLETE ✓)** (Phase 1.5 fully complete; 1.6a + 1.6b done)
 **Last updated:** 2026-04-25
 
 ## Purpose
@@ -149,7 +149,7 @@ SkillGauge/
 | Area | Status | What |
 |---|---|---|
 | Logout button visible when authed | ✓ done (1.6a) | Global `AuthModalProvider` + new `UserMenu` component in both AppLayout and InterviewHeader. Authed = email + Sign out; anonymous = Sign in (opens shared modal). Landing page CTA also auth-aware. |
-| Expanded homepage | High | Multi-section landing page (what / how / why); auth-state-aware CTAs |
+| Expanded homepage | ✓ done (1.6b) | 4-section landing: hero (existing) → "How it works" (3-step user journey) → "Why SkillGauge is different" (long-term memory + context-aware + privacy pitch) → footer CTA. Auth-aware CTAs in hero AND footer. Static-only — no new deps, no new hooks. |
 | Active LLM provider badge | High | `GET /api/health/info` exposes `{llmProvider, llmModel}`; FE chip shows "stub" / "openai · gpt-4o-mini" / etc. so the demo doesn't pretend a real model is grading |
 | Chatroom-style sidebar (UI only) | Medium | Sessions as chatrooms grouped by resume + date; backed by localStorage archive today, swappable to server data in 3f |
 
