@@ -47,13 +47,15 @@ describe("session routes", () => {
     await app.close();
   });
 
-  it("requires auth on all session routes", async () => {
+  it("requires auth on all session routes (NOT_AUTHENTICATED)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/sessions",
       payload: baseInitPayload,
     });
     expect(res.statusCode).toBe(401);
+    // Phase 1.5e: structured error contract — body has {code, message}, not legacy {error}.
+    expect(res.json().code).toBe("NOT_AUTHENTICATED");
   });
 
   it("initializes a session and returns first question", async () => {
@@ -104,7 +106,7 @@ describe("session routes", () => {
     }
   });
 
-  it("rejects session access from another user with 403", async () => {
+  it("rejects session access from another user with SESSION_FORBIDDEN (403)", async () => {
     const init = await app.inject({
       method: "POST",
       url: "/api/sessions",
@@ -120,9 +122,20 @@ describe("session routes", () => {
       headers: { cookie: otherCookie },
     });
     expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("SESSION_FORBIDDEN");
   });
 
-  it("rejects malformed init payload with 400", async () => {
+  it("returns SESSION_NOT_FOUND (404) for a non-existent session id", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/sessions/no-such-session/questions/0",
+      headers: { cookie },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("SESSION_NOT_FOUND");
+  });
+
+  it("rejects malformed init payload with INVALID_FORMAT (400)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/sessions",
@@ -133,9 +146,10 @@ describe("session routes", () => {
       },
     });
     expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("INVALID_FORMAT");
   });
 
-  it("rejects unsupported interview style with 400", async () => {
+  it("rejects unsupported interview style with INVALID_FORMAT (400)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/sessions",
@@ -146,6 +160,7 @@ describe("session routes", () => {
       },
     });
     expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("INVALID_FORMAT");
   });
 
   it("honors difficulty by selecting harder technical prompts", async () => {

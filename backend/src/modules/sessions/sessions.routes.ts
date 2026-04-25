@@ -1,19 +1,35 @@
+/**
+ * Routes for the interview-session lifecycle.
+ *
+ * Phase 1.5e: schemas now come from `@/shared/contracts` (single source of truth) and
+ * every error response uses the project-wide `{code, message}` shape. The 5 distinct
+ * error codes here let the FE branch on machine-readable identifiers instead of parsing
+ * strings:
+ *   - INVALID_FORMAT         (400) — zod parse failure on body or :index path param
+ *   - SESSION_NOT_FOUND      (404) — id doesn't resolve to a session, or its current
+ *                                    question slot is missing (corrupt state)
+ *   - SESSION_FORBIDDEN      (403) — session belongs to another user
+ *   - SESSION_COMPLETED      (409) — caller tried to submit an answer after isComplete
+ *   - SESSION_INDEX_MISMATCH (409) — caller asked for question N but session is on M
+ */
+
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "@/plugins/auth";
-import { answerSchema, initSessionSchema } from "./sessions.schema";
+import { answerSchema, initSessionSchema } from "@/shared/contracts";
 import { SessionError, sessionsService } from "./sessions.service";
 
 export async function sessionRoutes(app: FastifyInstance): Promise<void> {
-  // Every session route requires auth — apply the hook at the route level so
-  // a missed decorator can't accidentally expose data.
+  // Every session route requires auth — apply the hook at the route level so a missed
+  // decorator on a single route can't accidentally expose data.
   app.addHook("preHandler", requireAuth);
 
   app.post("/api/sessions", async (request, reply) => {
     const parsed = initSessionSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply
-        .code(400)
-        .send({ error: "Invalid session request", details: parsed.error.issues });
+      return reply.code(400).send({
+        code: "INVALID_FORMAT",
+        message: "Invalid session request",
+      });
     }
     const result = await sessionsService.initialize(
       request.userId!,
@@ -27,7 +43,10 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const index = Number.parseInt(request.params.index, 10);
       if (!Number.isInteger(index) || index < 0) {
-        return reply.code(400).send({ error: "Invalid question index" });
+        return reply.code(400).send({
+          code: "INVALID_FORMAT",
+          message: "Invalid question index",
+        });
       }
       try {
         const msg = await sessionsService.getQuestion(
@@ -39,8 +58,8 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
       } catch (err) {
         if (err instanceof SessionError) {
           return reply
-            .code(err.code === "FORBIDDEN" ? 403 : 404)
-            .send({ error: err.message });
+            .code(statusForSessionError(err.code))
+            .send({ code: codeForSessionError(err.code), message: err.message });
         }
         throw err;
       }
@@ -52,7 +71,10 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const parsed = answerSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.code(400).send({ error: "Invalid answer payload" });
+        return reply.code(400).send({
+          code: "INVALID_FORMAT",
+          message: "Invalid answer payload",
+        });
       }
       try {
         const result = await sessionsService.submitAnswer(
@@ -63,16 +85,43 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         return reply.send(result);
       } catch (err) {
         if (err instanceof SessionError) {
-          const status =
-            err.code === "FORBIDDEN"
-              ? 403
-              : err.code === "ALREADY_COMPLETE" || err.code === "INDEX_MISMATCH"
-                ? 409
-                : 404;
-          return reply.code(status).send({ error: err.message });
+          return reply
+            .code(statusForSessionError(err.code))
+            .send({ code: codeForSessionError(err.code), message: err.message });
         }
         throw err;
       }
     },
   );
+}
+
+// HTTP status by SessionError code. Centralized so future code adds slot in here, not
+// in scattered ternaries across two routes.
+function statusForSessionError(code: SessionError["code"]): number {
+  switch (code) {
+    case "FORBIDDEN":
+      return 403;
+    case "NOT_FOUND":
+      return 404;
+    case "ALREADY_COMPLETE":
+    case "INDEX_MISMATCH":
+      return 409;
+  }
+}
+
+// Wire-level code by SessionError code. Internal codes ("FORBIDDEN") get a more
+// descriptive wire name ("SESSION_FORBIDDEN") so a FE consumer reading just the code
+// knows the surface without context. Future contracts.ts could lift this map but the
+// surface is small enough that inline here is the simpler choice today.
+function codeForSessionError(code: SessionError["code"]): string {
+  switch (code) {
+    case "NOT_FOUND":
+      return "SESSION_NOT_FOUND";
+    case "FORBIDDEN":
+      return "SESSION_FORBIDDEN";
+    case "ALREADY_COMPLETE":
+      return "SESSION_COMPLETED";
+    case "INDEX_MISMATCH":
+      return "SESSION_INDEX_MISMATCH";
+  }
 }

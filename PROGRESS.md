@@ -2,9 +2,9 @@
 
 Living document tracking every change made during the end-to-end build. Newest entries at the top within each phase.
 
-**Current phase:** Phase 1.5d — Session rotation **(COMPLETE ✓)** (`jwtEpoch` per-user, JWT carries epoch, `requireAuth` rejects on mismatch, `logout-all` route, password reset bumps epoch)
-**Next phase:** Phase 1.5e — Shared contracts + sessions error sweep
-**Then:** **Phase 1.6 UI polish & visibility** → Phase 2 AI Intelligence (2b prompts first → 2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
+**Current phase:** Phase 1.5e — Shared contracts + sessions error sweep **(COMPLETE ✓)** (single `backend/src/shared/contracts.ts`, sessions/health swept to `{code, message}`, three old `*.schema.ts` files deleted). **Phase 1.5 fully complete.**
+**Next phase:** Phase 1.6a — Auth-aware persistent header with logout
+**Then:** 1.6b expanded homepage → 1.6c LLM badge → 1.6d chatroom sidebar → Phase 2 AI Intelligence (2b prompts first → 2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
 **Started:** 2026-04-18
 **Phase 0a finished:** 2026-04-18
 **Phase 0b finished:** 2026-04-19
@@ -14,6 +14,7 @@ Living document tracking every change made during the end-to-end build. Newest e
 **Phase 1.5b finished:** 2026-04-25
 **Phase 1.5c finished:** 2026-04-25
 **Phase 1.5d finished:** 2026-04-25
+**Phase 1.5e finished:** 2026-04-25 (Phase 1.5 fully complete)
 
 ---
 
@@ -669,12 +670,63 @@ Bumping a user's `jwtEpoch` from N → N+1 makes every token signed with `epoch=
 // TODO:phase-4 add a short-TTL user cache to avoid the per-request Mongo lookup
 ```
 
-### 1.5e — Schema/contract cleanup
-- [ ] Extract shared request/response zod schemas into `backend/src/shared/contracts.ts` (import from both routes and services)
-- [ ] Remove any remaining implicit `any` in service return types
-- [ ] Top-of-file comments on new plugins
+### 1.5e — Schema/contract cleanup ✓
 
-**Exit criteria for Phase 1.5:** all five sub-phases green; backend + web CI green; no new external dependency; [ARCHITECTURE.md §9](ARCHITECTURE.md) auth section updated.
+#### Goals
+- ✓ Lift all wire-level zod schemas into a single [backend/src/shared/contracts.ts](backend/src/shared/contracts.ts)
+- ✓ Delete the three scattered `*.schema.ts` files (`auth/auth.schema.ts`, `auth/password.schema.ts`, `sessions/sessions.schema.ts`) — single source of truth means no drift
+- ✓ Sweep sessions routes from legacy `{error}` shape to project-wide `{code, message}` (4 new wire codes: `SESSION_NOT_FOUND`, `SESSION_FORBIDDEN`, `SESSION_COMPLETED`, `SESSION_INDEX_MISMATCH`)
+- ✓ Add JSDoc top-of-file comments on `contracts.ts`, `sessions.routes.ts` to document the SoT pattern + the SessionError → wire code mapping
+
+#### Final verification (2026-04-25)
+
+| Command | Status |
+|---|---|
+| `cd backend && npx tsc --noEmit` | ✓ clean |
+| `cd backend && npm test` | ✓ 37/37 pass (was 36 — +1 `SESSION_NOT_FOUND` case in `sessions.test.ts`) |
+| `cd backend && npm run build` | ✓ `dist/` emitted |
+| `cd web && npx tsc --noEmit && npm test -- --ci && npm run build` | ✓ unchanged (FE not touched in 1.5e — `apiFetch`'s 1.5a fallback already accepts both `{code, message}` and legacy `{error}`) |
+
+#### Error contract additions (sessions surface)
+
+| Endpoint | Status | Body |
+|---|---|---|
+| `POST /api/sessions` invalid body | 400 | `{code: "INVALID_FORMAT", message: "Invalid session request"}` |
+| `GET /api/sessions/:id/questions/:index` invalid index | 400 | `{code: "INVALID_FORMAT", message: "Invalid question index"}` |
+| `POST /api/sessions/:id/answers` invalid body | 400 | `{code: "INVALID_FORMAT", message: "Invalid answer payload"}` |
+| Any session route, session belongs to another user | 403 | `{code: "SESSION_FORBIDDEN", message: "Session belongs to another user"}` |
+| Any session route, session id doesn't exist | 404 | `{code: "SESSION_NOT_FOUND", message: "Session not found"}` |
+| `POST /api/sessions/:id/answers` after isComplete | 409 | `{code: "SESSION_COMPLETED", message: "Session already complete"}` |
+| `GET /api/sessions/:id/questions/:index` index out of order | 409 | `{code: "SESSION_INDEX_MISMATCH", message: "Cannot jump to question N..."}` |
+
+#### Changelog
+
+- **2026-04-25** — Phase 1.5e shipped. PROGRESS.md, IMPLEMENTATION_STATUS.md, ARCHITECTURE.md, requirements.md updated.
+- **2026-04-25** — Created [backend/src/shared/contracts.ts](backend/src/shared/contracts.ts) — exports `credentialsSchema`, `resetRequestSchema`, `resetConfirmSchema`, `initSessionSchema`, `answerSchema`, plus their inferred types AND the enum tuples (`INTERVIEW_STYLES`, `DIFFICULTY_LEVELS`, `ROLE_LEVELS`, `QUESTION_COUNTS`). Top-of-file JSDoc explains the SoT rationale + what *doesn't* belong here (storage shapes, service DTOs).
+- **2026-04-25** — `auth.routes.ts` + `sessions.routes.ts` now import schemas from `@/shared/contracts`. The three old `*.schema.ts` files deleted.
+- **2026-04-25** — `sessions.routes.ts` rewritten with two new helpers — `statusForSessionError(code)` and `codeForSessionError(code)` — that map the internal `SessionError.code` (NOT_FOUND, FORBIDDEN, ALREADY_COMPLETE, INDEX_MISMATCH) to HTTP status + wire-level code. Centralized so adding a new error type is one switch-case insertion in two functions, not a scattered ternary across two routes.
+- **2026-04-25** — Added `SESSION_NOT_FOUND` test to `sessions.test.ts` covering the previously-untested 404 path. All existing test status assertions tightened to also check `code`.
+- **2026-04-25** — Backend test count: 36 → 37.
+
+#### Files created
+- [backend/src/shared/contracts.ts](backend/src/shared/contracts.ts) — all wire-level zod schemas in one file
+
+#### Files modified
+- [backend/src/modules/auth/auth.routes.ts](backend/src/modules/auth/auth.routes.ts) — schema imports
+- [backend/src/modules/sessions/sessions.routes.ts](backend/src/modules/sessions/sessions.routes.ts) — schema imports + `{code, message}` sweep + helper functions
+- [backend/tests/sessions.test.ts](backend/tests/sessions.test.ts) — added `code` assertions; new SESSION_NOT_FOUND test
+
+#### Files deleted
+- `backend/src/modules/auth/auth.schema.ts`
+- `backend/src/modules/auth/password.schema.ts`
+- `backend/src/modules/sessions/sessions.schema.ts`
+
+#### Notable gotchas
+1. **FE didn't need a change**: Phase 1.5a's `apiFetch` already falls back from `body.code/body.message` to legacy `body.error`. So the sessions sweep is invisible to the FE — sessions error messages display the same way before and after 1.5e.
+2. **Two-function mapping**: `statusForSessionError` + `codeForSessionError` instead of one big switch returning a tuple — TypeScript's narrowing is per-return-statement, so two single-purpose functions stay easier to read and let `tsc` verify exhaustiveness on each axis.
+3. **Why `SESSION_INDEX_MISMATCH` vs renaming the internal**: the internal `SessionError.code: "INDEX_MISMATCH"` is fine inside the BE codebase, but on the wire a future FE consumer (or external API user) needs the surface name (`SESSION_*`) to disambiguate from a hypothetical future feature with its own "INDEX_MISMATCH". Cheap clarity.
+
+**Exit criteria for Phase 1.5: ALL FIVE SUB-PHASES COMPLETE ✓.** 1.5a/b/c/d/e all green; backend + web CI green; one new external dep (`@fastify/rate-limit`, justified); ARCHITECTURE.md §9.1/9.2/9.3/9.4 each ship a deep walkthrough of the corresponding flow.
 
 ---
 

@@ -365,6 +365,12 @@ Source: [backend/src/plugins/auth.ts](backend/src/plugins/auth.ts), [backend/src
 | `INVALID_TOKEN` | 400 | `/api/auth/password/reset-confirm` when the reset token is unknown / expired / already used / lost a race (Phase 1.5b) |
 | `ACCOUNT_LOCKED` | 423 | `/api/auth/login` when the per-email failure count reached the threshold (Phase 1.5c) |
 | `RATE_LIMIT_EXCEEDED` | 429 | Any rate-limited route (`/api/auth/login`, `/api/auth/password/reset-request`) when the per-IP cap is hit (Phase 1.5c) |
+| `SESSION_NOT_FOUND` | 404 | Any session route when the `:id` doesn't resolve (Phase 1.5e) |
+| `SESSION_FORBIDDEN` | 403 | Any session route when the session belongs to another user (Phase 1.5e) |
+| `SESSION_COMPLETED` | 409 | `POST /api/sessions/:id/answers` after `isComplete` (Phase 1.5e) |
+| `SESSION_INDEX_MISMATCH` | 409 | `GET /api/sessions/:id/questions/:index` when caller asked for question N but session is on M (Phase 1.5e) |
+
+All wire-level zod schemas live in [backend/src/shared/contracts.ts](backend/src/shared/contracts.ts) as of Phase 1.5e — single source of truth, no per-module schema drift. The mapping from internal `SessionError.code` to wire-level `SESSION_*` code is centralized in two helper functions (`statusForSessionError`, `codeForSessionError`) inside [sessions.routes.ts](backend/src/modules/sessions/sessions.routes.ts).
 
 Sessions and health routes still emit the legacy `{error}` shape — Phase 1.5e's shared-contracts pass will sweep them. The FE [`apiFetch`](web/services/api.ts) reads `body.code` + `body.message` first and falls back to `body.error`, so both shapes coexist on the wire today.
 
@@ -1038,12 +1044,12 @@ cd web && npm install && npm run dev                            # :3000
 | 0b — Next.js migration | ✓ done | Ported RR7 → Next 16 App Router, Vitest → Jest, created this doc |
 | 1 — Real backend w/ stubbed AI | ✓ done | Fastify + MongoDB + cookie JWT + stubClient; FE on real HTTP |
 | 1.1 — UX enhancements | ✓ done | Dark mode, rich setup inputs (style/difficulty/role/count), resume-per-session guard, home-nav confirms |
-| **1.5 — Auth hardening** (sub-parted) | partial | 1.5a ✓; 1.5b–e pending |
+| **1.5 — Auth hardening** (sub-parted) | ✓ done (2026-04-25) | All five sub-phases shipped |
 | &nbsp;&nbsp;1.5a — JWT login polish | ✓ done (2026-04-25) | Cookie flags, error shapes, `JWT_TTL_DAYS` env, expired-token test, audit log |
 | &nbsp;&nbsp;1.5b — Password reset | ✓ done (2026-04-25) | Opaque request + single-use SHA-256-hashed TTL'd token + FE `/reset` route + AuthModal forgot inline form |
 | &nbsp;&nbsp;1.5c — Auth rate limits + lockout | ✓ done (2026-04-25) | `@fastify/rate-limit` per-IP (10/min) + `login_attempts` per-email (5 fails / 15 min → 423) |
 | &nbsp;&nbsp;1.5d — Session rotation | ✓ done (2026-04-25) | Per-user `jwtEpoch` in JWT payload; `POST /api/auth/logout-all`; password reset bumps epoch |
-| &nbsp;&nbsp;1.5e — Contract cleanup | pending | Shared zod contracts, tighten service return types |
+| &nbsp;&nbsp;1.5e — Contract cleanup | ✓ done (2026-04-25) | All schemas in `backend/src/shared/contracts.ts`; sessions routes swept to `{code, message}` with 4 new codes |
 | **1.6 — UI polish & visibility** (NEW) | pending | Logout in header, expanded homepage, LLM provider badge, chatroom sidebar foundation |
 | &nbsp;&nbsp;1.6a — Auth-aware persistent header w/ logout | pending | User menu when authed; "Sign in" otherwise |
 | &nbsp;&nbsp;1.6b — Expanded homepage | pending | Multi-section landing (what / how / why); auth-aware CTAs |

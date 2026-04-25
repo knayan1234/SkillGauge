@@ -8,12 +8,12 @@ import {
   signSessionToken,
 } from "@/plugins/auth";
 import { hashEmailForLog } from "@/shared/audit";
-import { credentialsSchema } from "./auth.schema";
-import { AuthError, authService } from "./auth.service";
 import {
+  credentialsSchema,
   resetConfirmSchema,
   resetRequestSchema,
-} from "./password.schema";
+} from "@/shared/contracts";
+import { AuthError, authService } from "./auth.service";
 import {
   PasswordResetError,
   passwordResetService,

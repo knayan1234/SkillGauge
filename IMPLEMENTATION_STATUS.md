@@ -1,6 +1,6 @@
 # SkillGauge Implementation Status
 
-**Current phase:** Phase 1.5d — Session rotation **(COMPLETE ✓)**
+**Current phase:** Phase 1.5 — Auth Hardening **(FULLY COMPLETE ✓ — all 5 sub-phases shipped)**
 **Last updated:** 2026-04-25
 
 ## Purpose
@@ -26,7 +26,7 @@ For the architectural reference see [ARCHITECTURE.md](ARCHITECTURE.md). For the 
 - Resume-change guard: starting a new interview while one is active prompts to archive the prior snapshot (localStorage) before overwriting the live session handoff blob.
 - The old `skillgauge/` RR7 prototype has been deleted (Phase 0b).
 - CI runs two parallel jobs (`web`, `backend`) — each install → typecheck → test → build.
-- 23 FE tests + 36 BE tests = 59 total, green (BE bumped from 32 to 36 in Phase 1.5d: 4 session-rotation cases).
+- 23 FE tests + 37 BE tests = 60 total, green (BE bumped from 36 to 37 in Phase 1.5e: +1 SESSION_NOT_FOUND case; auth surface contract sweep added no failures).
 - Auth surface (Phase 1.5a + 1.5b + 1.5c + 1.5d) supports register / login / logout / **logout-all** / `/me` / password reset request / password reset confirm. Defense-in-depth: per-IP rate limit + per-email soft lockout + structured `{code, message}` errors + **per-user JWT epoch rotation**.
 - Codes: `INVALID_FORMAT`, `EMAIL_TAKEN`, `INVALID_CREDENTIALS`, `NOT_AUTHENTICATED`, `INVALID_SESSION` (now also covers stale epoch + deleted-user paths), `USER_NOT_FOUND`, `INVALID_TOKEN`, `ACCOUNT_LOCKED`, `RATE_LIMIT_EXCEEDED`.
 - Env-driven knobs: `JWT_TTL_DAYS` (7), `RESET_TTL_MIN` (30), `AUTH_RATE_PER_MIN` (10), `LOGIN_LOCKOUT_THRESHOLD` (5), `LOGIN_LOCKOUT_WINDOW_MIN` (15).
@@ -112,6 +112,7 @@ SkillGauge/
 | Password reset | ✓ done (1.5b) | `password_reset_tokens` collection (SHA-256 hashed token, TTL via `RESET_TTL_MIN` env default 30 min, single-use via atomic `markUsed`). Two routes — `reset-request` opaque-200, `reset-confirm` 200/400 INVALID_TOKEN/INVALID_FORMAT. FE: `/reset?token=` page + AuthModal "Forgot password?" inline form. Dev sink: link logged via `request.log.info`. **Note:** session invalidation on reset deferred to 1.5d (TODO marker in service). |
 | Auth rate limit + lockout | ✓ done (1.5c) | **Per-IP**: `@fastify/rate-limit` opt-in on login + reset-request (default 10/min via `AUTH_RATE_PER_MIN` env) → 429 `RATE_LIMIT_EXCEEDED`. **Per-email**: `login_attempts` collection (TTL'd, hashed email + IP) → 423 `ACCOUNT_LOCKED` after `LOGIN_LOCKOUT_THRESHOLD` failures (default 5) in `LOGIN_LOCKOUT_WINDOW_MIN` (default 15). Lockout check runs pre-bcrypt; counts unknown emails too (no enumeration). Successful login wipes the streak. |
 | Session rotation | ✓ done (1.5d) | `users.jwtEpoch` field + JWT payload `{ sub, epoch }`. `requireAuth` rejects on `payload.epoch < user.jwtEpoch`. New `POST /api/auth/logout-all` (auth required) bumps the epoch → instant global logout for that user. Password reset confirm also bumps the epoch (closes the phished-link gap from 1.5b). |
+| Shared contracts + sessions error sweep | ✓ done (1.5e) | All wire-level zod schemas live in [backend/src/shared/contracts.ts](backend/src/shared/contracts.ts) (single source of truth — three old per-module `*.schema.ts` files deleted). Sessions routes flipped from `{error}` to `{code, message}` with 4 new wire codes (`SESSION_NOT_FOUND`, `SESSION_FORBIDDEN`, `SESSION_COMPLETED`, `SESSION_INDEX_MISMATCH`). FE didn't need a change — `apiFetch`'s 1.5a fallback already accepts both shapes. |
 | `requireAuth` preHandler | ✓ done | Verifies cookie, loads user onto `request.user`; 401 on missing/tampered |
 | Session lifecycle | ✓ done (1.1) | Create session + first question atomically; `totalQuestions` driven by `request.questionCount`; idempotent question fetch; batched answer response |
 | Session init contract | ✓ done (1.1) | `initSessionSchema` now accepts `interviewStyle` + `difficulty` + `roleLevel` + `questionCount` + optional `focusAreas`; persisted on the session doc and threaded into `QuestionContext` via `ctxFromSession()` |
@@ -274,9 +275,13 @@ SkillGauge/
 4. ✓ Password reset confirm bumps epoch (closes 1.5b gap)
 5. ✓ 4 new tests in `auth.test.ts`; BE total 32 → 36
 
-### Phase 1.5e (pending)
+### Phase 1.5e (✓ complete, 2026-04-25 — closes Phase 1.5)
 
-1. Shared contracts cleanup — `backend/src/shared/contracts.ts`; sweep sessions/health to `{code, message}`; remove implicit any from service return types
+1. ✓ All wire-level zod schemas lifted to `backend/src/shared/contracts.ts`
+2. ✓ Three legacy `*.schema.ts` files deleted (single source of truth)
+3. ✓ Sessions routes return `{code, message}` with 4 new codes; +1 SESSION_NOT_FOUND test
+4. ✓ Helper functions `statusForSessionError` + `codeForSessionError` centralize the SessionError → wire mapping
+5. ✓ BE total 36 → 37
 
 ### Phase 1.6 (pending — UI polish & visibility)
 
