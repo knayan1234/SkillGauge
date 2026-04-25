@@ -28,4 +28,11 @@ export const usersRepo = {
   async findById(id: string): Promise<UserDoc | null> {
     return (await users()).findOne({ _id: id });
   },
+
+  // Used by the password reset confirm flow (Phase 1.5b). Single-purpose updater so the
+  // service stays at one DB call per concern.
+  // TODO:phase-1.5d add a sibling bumpJwtEpoch() and call it from the same code path.
+  async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
+    await (await users()).updateOne({ _id: id }, { $set: { passwordHash } });
+  },
 };

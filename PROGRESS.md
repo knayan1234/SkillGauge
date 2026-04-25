@@ -2,15 +2,16 @@
 
 Living document tracking every change made during the end-to-end build. Newest entries at the top within each phase.
 
-**Current phase:** Phase 1.5a — JWT login polish **(COMPLETE ✓)** (env-driven TTL, structured `{code,message}` errors, login-failure auditing, expired-token test)
-**Next phase:** Phase 1.5b — Password reset flow
-**Then:** 1.5c rate-limit/lockout → 1.5d session rotation → 1.5e contract cleanup → **Phase 1.6 UI polish & visibility** → Phase 2 AI Intelligence (2a → 2e) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
+**Current phase:** Phase 1.5b — Password reset flow **(COMPLETE ✓)** (opaque request, single-use TTL'd token, dev stdout sink, FE `/reset` route + AuthModal "Forgot password?" inline form)
+**Next phase:** Phase 1.5c — Auth rate-limit + lockout
+**Then:** 1.5d session rotation → 1.5e contract cleanup → **Phase 1.6 UI polish & visibility** → Phase 2 AI Intelligence (2b prompts first → 2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
 **Started:** 2026-04-18
 **Phase 0a finished:** 2026-04-18
 **Phase 0b finished:** 2026-04-19
 **Phase 1 finished:** 2026-04-19
 **Phase 1.1 finished:** 2026-04-20
 **Phase 1.5a finished:** 2026-04-25
+**Phase 1.5b finished:** 2026-04-25
 
 ---
 
@@ -449,11 +450,86 @@ Bridges Phase 1 → Phase 2. Keeps all work local, no external keys. Small, merg
 
 ---
 
-### 1.5b — Password reset flow
-- [ ] `POST /api/auth/password/reset-request` → opaque 200 (no user enumeration), stores single-use token hash + TTL in a new `password_reset_tokens` table
-- [ ] `POST /api/auth/password/reset-confirm` → consumes token, bcrypts new password, invalidates existing sessions (rotate `jwt_epoch` column on user)
-- [ ] FE: "Forgot password?" link in `AuthModal`, dedicated `/reset` route
-- [ ] Dev: log reset link to stdout (no mail provider yet). Production mail goes in Phase 4.
+### 1.5b — Password reset flow ✓
+
+#### Goals
+- ✓ `POST /api/auth/password/reset-request` → opaque 200 (no user enumeration), stores single-use token hash + TTL in a new `password_reset_tokens` collection
+- ✓ `POST /api/auth/password/reset-confirm` → consumes token, bcrypts new password, marks token used. **Note**: session invalidation via `jwt_epoch` is deferred to 1.5d (TODO marker in place); today the old session token remains valid until natural expiry.
+- ✓ FE: "Forgot password?" inline form in `AuthModal`, dedicated `/reset?token=...` route with `PasswordResetForm`
+- ✓ Dev: log reset link to stdout via `request.log.info` (Phase 4 swaps to a transactional mail provider)
+
+#### Final verification (2026-04-25)
+
+| Command | Status |
+|---|---|
+| `cd backend && npx tsc --noEmit` | ✓ clean |
+| `cd backend && npm test` | ✓ 28/28 pass (was 20 — +8 password reset cases) |
+| `cd backend && npm run build` | ✓ `dist/` emitted |
+| `cd web && npx tsc --noEmit` | ✓ clean |
+| `cd web && npm test -- --ci` | ✓ 23/23 pass (no FE behavior regression; new components covered by manual smoke) |
+| `cd web && npm run build` | ✓ static routes built (now includes `/reset`) |
+
+#### Error contract additions
+
+| Endpoint | Status | Body |
+|---|---|---|
+| `POST /api/auth/password/reset-request` (any input) | 200 | (empty) — opaque on purpose |
+| `POST /api/auth/password/reset-confirm` invalid format | 400 | `{code: "INVALID_FORMAT", message: "Invalid token or password format"}` |
+| `POST /api/auth/password/reset-confirm` bad/expired/used token | 400 | `{code: "INVALID_TOKEN", message: "Invalid or expired reset token"}` |
+
+#### New collection: `password_reset_tokens`
+
+`{_id, userId, tokenHash, expiresAt, usedAt, createdAt}`. Indexes: unique on `tokenHash`; TTL on `expiresAt` (Mongo auto-deletes expired docs within ~60s of expiry).
+
+**Why hash, not plain token**: a DB leak doesn't expose live reset tokens. The plain token only ever lives in the email link; the BE re-hashes incoming tokens before lookup.
+
+#### New env var
+- `RESET_TTL_MIN` — default 30 (minutes). Validated by zod in [config/env.ts](backend/src/config/env.ts).
+
+#### Changelog
+
+- **2026-04-25** — Phase 1.5b shipped. PROGRESS.md, IMPLEMENTATION_STATUS.md, ARCHITECTURE.md, requirements.md updated.
+- **2026-04-25** — New repo [backend/src/db/repos/passwordResetTokens.ts](backend/src/db/repos/passwordResetTokens.ts) with `create`, `findByHash`, `markUsed` (atomic `findOneAndUpdate` to handle parallel-confirm races). Token doc shape stores SHA-256 hex of plain token, never the plain.
+- **2026-04-25** — New service [backend/src/modules/auth/password.service.ts](backend/src/modules/auth/password.service.ts) split from `auth.service.ts` (SRP). `requestReset` always returns a result (link or null); the route logs the link in dev. `confirmReset` checks not-found / expired / already-used / lost-race and collapses all four into `INVALID_TOKEN` to deny attackers any signal about which check failed.
+- **2026-04-25** — Two new routes wired into [backend/src/modules/auth/auth.routes.ts](backend/src/modules/auth/auth.routes.ts) — `/api/auth/password/reset-request` and `/api/auth/password/reset-confirm`. Request route logs the dev-mode link via `request.log.info({event: "auth.password.reset_link_issued", emailHash, link})` — never the email itself.
+- **2026-04-25** — `usersRepo` gained `updatePasswordHash(id, hash)` so the service stays at one DB call per concern (no more dynamic-import escape hatch).
+- **2026-04-25** — DB indexes: `password_reset_tokens.tokenHash` unique + `expiresAt` TTL (`expireAfterSeconds: 0`). Idempotent — re-running `npm run migrate` is a no-op.
+- **2026-04-25** — FE: new [web/services/api.ts](web/services/api.ts) functions `requestPasswordReset(email)` and `confirmPasswordReset(token, newPassword)`. New page [web/app/reset/page.tsx](web/app/reset/page.tsx) with `useSearchParams` (Suspense-wrapped per Next 16 requirement) showing a friendly "link broken" state if the URL has no token. New component [web/features/auth/PasswordResetForm.tsx](web/features/auth/PasswordResetForm.tsx) (RHF + zod, with confirm-password match check). [AuthModal.tsx](web/features/auth/AuthModal.tsx) refactored from 2-mode to 3-mode state machine — login / register / forgot — with an opaque success message after forgot-submit ("If that email exists...").
+- **2026-04-25** — Tests: new [backend/tests/passwordReset.test.ts](backend/tests/passwordReset.test.ts) with 8 tests (opaque 200 for unknown email; token doc created on known email; happy-path consume + login with new password; expired token → INVALID_TOKEN; replayed token → INVALID_TOKEN; unknown token → INVALID_TOKEN; malformed token → INVALID_FORMAT; too-short new password → INVALID_FORMAT). Backend test count: 20 → 28.
+
+#### Files created
+- [backend/src/db/repos/passwordResetTokens.ts](backend/src/db/repos/passwordResetTokens.ts)
+- [backend/src/modules/auth/password.schema.ts](backend/src/modules/auth/password.schema.ts)
+- [backend/src/modules/auth/password.service.ts](backend/src/modules/auth/password.service.ts)
+- [backend/tests/passwordReset.test.ts](backend/tests/passwordReset.test.ts)
+- [web/features/auth/passwordResetSchema.ts](web/features/auth/passwordResetSchema.ts)
+- [web/features/auth/PasswordResetForm.tsx](web/features/auth/PasswordResetForm.tsx)
+- [web/app/reset/page.tsx](web/app/reset/page.tsx)
+
+#### Files modified
+- [backend/src/config/env.ts](backend/src/config/env.ts) — `RESET_TTL_MIN`
+- [backend/.env.example](backend/.env.example) — same
+- [backend/src/db/indexes.ts](backend/src/db/indexes.ts) — token unique + TTL indexes
+- [backend/src/db/repos/users.ts](backend/src/db/repos/users.ts) — `updatePasswordHash`
+- [backend/src/modules/auth/auth.routes.ts](backend/src/modules/auth/auth.routes.ts) — 2 new routes + import
+- [web/services/api.ts](web/services/api.ts) — 2 new functions
+- [web/features/auth/AuthModal.tsx](web/features/auth/AuthModal.tsx) — 3-mode machine + forgot inline form
+
+#### Notable gotchas
+1. **Why all four token-failure modes return INVALID_TOKEN**: distinguishing "expired" from "already used" from "wrong" gives an attacker a probing oracle. We deliberately collapse to one error.
+2. **Atomic `markUsed` via `findOneAndUpdate`**: two parallel confirm requests racing on the same token must result in only one password change. Mongo's atomic update handles this without a transaction.
+3. **`Suspense` boundary on the `/reset` page**: Next 16 throws a build error if `useSearchParams()` is used without a Suspense ancestor — it can't statically render the route otherwise.
+4. **Dev stdout sink**: the link is logged via `request.log.info`, not `console.log`. Means production log shipping (Phase 4) will pick it up structured. The email-content version (Phase 4) will NOT log the link — only the issuance event.
+
+#### TODO markers planted for future phases
+```ts
+// TODO:phase-1.5c add per-IP/per-email rate limit on this endpoint
+// TODO:phase-1.5d bump user.jwtEpoch on confirm to invalidate existing sessions
+// TODO:phase-1.5e move shared schemas into backend/src/shared/contracts.ts
+// TODO:phase-4 swap stdout sink for transactional mail (SES/Resend/Postmark)
+```
+
+---
 
 ### 1.5c — Auth rate limiting + lockout
 - [ ] Plugin: per-IP rate limit on `/api/auth/login` and `/reset-request` (e.g., 10/min)

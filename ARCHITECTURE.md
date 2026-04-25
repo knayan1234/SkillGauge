@@ -88,8 +88,6 @@ SkillGauge/
 ├── PROGRESS.md                  ← living build log (phase checklists + changelog)
 ├── IMPLEMENTATION_STATUS.md     ← what is / isn't built, reconciled per phase
 ├── README.md                    ← top-level intro, run instructions
-├── audits/
-│   └── code-duplication-audit-2026-04-19.md
 ├── .github/
 │   └── workflows/ci.yml         ← parallel web + backend jobs
 ├── backend/                     ← Fastify 5 HTTP API (Phase 1)
@@ -364,6 +362,7 @@ Source: [backend/src/plugins/auth.ts](backend/src/plugins/auth.ts), [backend/src
 | `NOT_AUTHENTICATED` | 401 | `requireAuth` with no cookie |
 | `INVALID_SESSION` | 401 | `requireAuth` with expired / tampered / wrong-secret cookie |
 | `USER_NOT_FOUND` | 401 | `/api/me` when the JWT verifies but the user has been deleted |
+| `INVALID_TOKEN` | 400 | `/api/auth/password/reset-confirm` when the reset token is unknown / expired / already used / lost a race (Phase 1.5b) |
 
 Sessions and health routes still emit the legacy `{error}` shape — Phase 1.5e's shared-contracts pass will sweep them. The FE [`apiFetch`](web/services/api.ts) reads `body.code` + `body.message` first and falls back to `body.error`, so both shapes coexist on the wire today.
 
@@ -423,6 +422,96 @@ Without both, the browser silently drops the `Set-Cookie` (silently, no console 
 **(f) What rotation looks like.** Bumping `JWT_SECRET` invalidates every existing token instantly (every signature now mismatches), so every user is logged out and their next request returns 401. Currently this means an unannounced downtime moment — Phase 1.5d will add `jwt_epoch` per user so we can rotate gracefully without booting everyone.
 
 **(g) What's *not* in the JWT.** No email, no roles, no permissions. Just `sub`. Every request that needs more than the user ID hits Mongo via `usersRepo.findById`. Trade-off: extra DB read per request, but tokens stay tiny + we never have to worry about stale claims (e.g. role changes take effect immediately, no need to wait for token expiry).
+
+### 9.2 Password reset flow (Phase 1.5b)
+
+The reset flow is two-stage: **request** → email link → **confirm**. Each stage is a separate route with deliberate properties chosen to defend against the common attacks (enumeration, replay, brute force, race).
+
+**(a) New collection: `password_reset_tokens`** ([repo](backend/src/db/repos/passwordResetTokens.ts)).
+
+| Field | Type | Why it's there |
+|---|---|---|
+| `_id` | UUID string | Random handle; never user-facing |
+| `userId` | UUID string | FK to the user this token can reset |
+| `tokenHash` | SHA-256 hex (64 chars) | The plain token's hash. **The plain token never lives in the DB.** A leaked DB doesn't expose live tokens — an attacker would need both the leak *and* the email link |
+| `expiresAt` | Date | TTL index → Mongo auto-deletes expired docs within ~60s of expiry. No cron job needed |
+| `usedAt` | Date \| null | Single-use enforcement. `findOneAndUpdate({_id, usedAt: null}, {$set: {usedAt: now}})` is atomic, so two parallel confirms can't both succeed |
+| `createdAt` | Date | Audit only |
+
+Indexes: unique on `tokenHash` (collision protection); TTL on `expiresAt` (auto-cleanup).
+
+**(b) Request — `POST /api/auth/password/reset-request`** ([routes](backend/src/modules/auth/auth.routes.ts), [service](backend/src/modules/auth/password.service.ts)):
+
+```
+{email} → 200 (empty body) — ALWAYS
+```
+
+Returns the same opaque 200 whether the email exists or not. **Why**: distinguishing "email registered" from "email unknown" is exactly the signal credential-stuffing attackers want. We deny it. Internally:
+1. Zod normalizes email (trim + lowercase + format).
+2. `usersRepo.findByEmail(email)` — if no user, no-op silently. The route still returns 200.
+3. If user exists: generate 32 bytes (256 bits) of randomness → hex → 64 chars; SHA-256-hex it; insert a token doc with `expiresAt = now + RESET_TTL_MIN` (default 30 min); return the plain token to the route layer.
+4. The route logs `request.log.info({event: "auth.password.reset_link_issued", emailHash, link})` — **never the raw email**. Phase 4 swaps this `info` line for a transactional mail send (SES / Resend / Postmark).
+
+`emailHash` is the same SHA-256 prefix from `hashEmailForLog` used by the failed-login audit log — letting Phase 1.5c correlate "request rate" per actor without storing emails in logs.
+
+**(c) Confirm — `POST /api/auth/password/reset-confirm`**:
+
+```
+{token (64 hex), newPassword (6+ chars)} → 200 (empty body) | 400 INVALID_TOKEN | 400 INVALID_FORMAT
+```
+
+Procedure:
+1. Zod validates token shape (64 hex chars) + password length. Format failures return 400 `INVALID_FORMAT` *before* any DB lookup.
+2. SHA-256 the incoming plain token; lookup by `tokenHash`.
+3. **Four checks, all collapsed to `INVALID_TOKEN`**:
+   - Token not found.
+   - `usedAt !== null` (already consumed).
+   - `expiresAt <= now` (caught even if Mongo's TTL sweeper hasn't fired yet).
+   - Atomic `markUsed` lost a race (parallel confirm; the loser's update returned null).
+4. bcrypt the new password; call `usersRepo.updatePasswordHash`.
+
+**Why one error code, not four?** Distinguishing "expired" from "already used" from "wrong" gives an attacker an oracle for probing token state. We don't help them.
+
+**(d) FE flow** ([AuthModal.tsx](web/features/auth/AuthModal.tsx), [/reset page](web/app/reset/page.tsx), [PasswordResetForm.tsx](web/features/auth/PasswordResetForm.tsx)):
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant M as AuthModal
+  participant A as services/api
+  participant BE as Fastify
+  participant DB as Mongo
+  participant SO as stdout (dev sink)
+  participant R as /reset page
+
+  U->>M: clicks "Forgot password?"
+  M->>M: switchToForgot — single-input email form
+  U->>M: enters email + submit
+  M->>A: requestPasswordReset(email)
+  A->>BE: POST /api/auth/password/reset-request
+  BE->>DB: usersRepo.findByEmail
+  BE->>DB: insert password_reset_tokens (hash + TTL)
+  BE->>SO: log info {event, emailHash, link}
+  BE-->>A: 200
+  A-->>M: ok
+  M->>U: opaque "If that email exists..." message
+
+  U->>SO: copies link from terminal
+  U->>R: opens /reset?token=...
+  R->>R: extracts ?token via useSearchParams (Suspense)
+  U->>R: enters new + confirm password
+  R->>A: confirmPasswordReset(token, newPassword)
+  A->>BE: POST /api/auth/password/reset-confirm
+  BE->>DB: findByHash → check usedAt + expiresAt
+  BE->>DB: atomic markUsed (findOneAndUpdate)
+  BE->>BE: bcrypt(newPassword)
+  BE->>DB: usersRepo.updatePasswordHash
+  BE-->>A: 200
+  A-->>R: ok
+  R->>U: success → redirect to /
+```
+
+**(e) Known gap — closed in 1.5d.** Confirming a reset does **not** invalidate the user's existing session cookie today. If an attacker phished a reset link, the user's old cookie still works until natural JWT expiry. Phase 1.5d adds `jwtEpoch` per user; resetting the password will bump the epoch, which `requireAuth` checks → all old tokens become `INVALID_SESSION` instantly. The `password.service.ts` `confirmReset` already has a `// TODO:phase-1.5d` marker on the exact line where the bump will go.
 
 ---
 
@@ -768,7 +857,7 @@ cd web && npm install && npm run dev                            # :3000
 | 1.1 — UX enhancements | ✓ done | Dark mode, rich setup inputs (style/difficulty/role/count), resume-per-session guard, home-nav confirms |
 | **1.5 — Auth hardening** (sub-parted) | partial | 1.5a ✓; 1.5b–e pending |
 | &nbsp;&nbsp;1.5a — JWT login polish | ✓ done (2026-04-25) | Cookie flags, error shapes, `JWT_TTL_DAYS` env, expired-token test, audit log |
-| &nbsp;&nbsp;1.5b — Password reset | pending | Opaque request + single-use token confirm + FE `/reset` |
+| &nbsp;&nbsp;1.5b — Password reset | ✓ done (2026-04-25) | Opaque request + single-use SHA-256-hashed TTL'd token + FE `/reset` route + AuthModal forgot inline form |
 | &nbsp;&nbsp;1.5c — Auth rate limits + lockout | pending | Per-IP + per-email throttles (counts 1.5a's audit lines) |
 | &nbsp;&nbsp;1.5d — Session rotation | pending | `jwt_epoch` column; logout-everywhere |
 | &nbsp;&nbsp;1.5e — Contract cleanup | pending | Shared zod contracts, tighten service return types |

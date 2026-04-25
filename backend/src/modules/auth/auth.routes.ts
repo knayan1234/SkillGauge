@@ -8,6 +8,14 @@ import {
 import { hashEmailForLog } from "@/shared/audit";
 import { credentialsSchema } from "./auth.schema";
 import { AuthError, authService } from "./auth.service";
+import {
+  resetConfirmSchema,
+  resetRequestSchema,
+} from "./password.schema";
+import {
+  PasswordResetError,
+  passwordResetService,
+} from "./password.service";
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/auth/register", async (request, reply) => {
@@ -86,6 +94,61 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/auth/logout", async (_request, reply) => {
     clearSessionCookie(reply);
     return reply.code(204).send();
+  });
+
+  // --- Password reset (Phase 1.5b) ---------------------------------------------------
+  // Two-step flow:
+  //   1) request — opaque 200; never reveals whether the email exists. If it does, a
+  //      single-use TTL'd token is generated and (in dev) logged to stdout.
+  //   2) confirm — consumes the token, bcrypts the new password, marks token used.
+  // Both routes are public (no requireAuth). 1.5c will add per-IP/per-email rate limits.
+  // TODO:phase-4 swap the dev-mode stdout sink for transactional mail.
+
+  app.post("/api/auth/password/reset-request", async (request, reply) => {
+    const parsed = resetRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      // Bad-format requests still get 200 — we don't want to leak "email shape was wrong"
+      // either. Just no-op silently.
+      return reply.code(200).send();
+    }
+    const result = await passwordResetService.requestReset(parsed.data.email);
+    if (result.link) {
+      // Dev-only stdout sink. Production (Phase 4) sends mail via a provider.
+      // Logging the link at INFO so it's visible in the dev terminal but not warn-level
+      // noise in CI/prod log shipping.
+      request.log.info(
+        {
+          event: "auth.password.reset_link_issued",
+          emailHash: hashEmailForLog(parsed.data.email),
+          link: result.link,
+        },
+        "password reset link issued (dev sink)",
+      );
+    }
+    // Same opaque 200 either way. No body, no Set-Cookie, no enumeration vector.
+    return reply.code(200).send();
+  });
+
+  app.post("/api/auth/password/reset-confirm", async (request, reply) => {
+    const parsed = resetConfirmSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        code: "INVALID_FORMAT",
+        message: "Invalid token or password format",
+      });
+    }
+    try {
+      await passwordResetService.confirmReset(
+        parsed.data.token,
+        parsed.data.newPassword,
+      );
+      return reply.code(200).send();
+    } catch (err) {
+      if (err instanceof PasswordResetError) {
+        return reply.code(400).send({ code: err.code, message: err.message });
+      }
+      throw err;
+    }
   });
 
   app.get(

@@ -15,6 +15,9 @@ const schema = z.object({
     .min(32, "JWT_SECRET must be at least 32 characters"),
   // Session lifetime in days. 7 matches the prior hardcoded default.
   JWT_TTL_DAYS: z.coerce.number().int().positive().default(7),
+  // Password reset token lifetime in minutes. 30 is the industry default — long enough
+  // for the user to switch from email tab to the app, short enough to limit replay risk.
+  RESET_TTL_MIN: z.coerce.number().int().positive().default(30),
   // Mongo connection string. Tests override at runtime with mongodb-memory-server.
   MONGODB_URI: z.string().default("mongodb://127.0.0.1:27017"),
   MONGODB_DB: z.string().default("skillgauge"),

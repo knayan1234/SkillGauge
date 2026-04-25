@@ -1,6 +1,6 @@
 # SkillGauge Implementation Status
 
-**Current phase:** Phase 1.5a — JWT login polish **(COMPLETE ✓)**
+**Current phase:** Phase 1.5b — Password reset flow **(COMPLETE ✓)**
 **Last updated:** 2026-04-25
 
 ## Purpose
@@ -26,8 +26,8 @@ For the architectural reference see [ARCHITECTURE.md](ARCHITECTURE.md). For the 
 - Resume-change guard: starting a new interview while one is active prompts to archive the prior snapshot (localStorage) before overwriting the live session handoff blob.
 - The old `skillgauge/` RR7 prototype has been deleted (Phase 0b).
 - CI runs two parallel jobs (`web`, `backend`) — each install → typecheck → test → build.
-- 23 FE tests + 20 BE tests = 43 total, green (BE bumped from 13 to 20 in Phase 1.5a: 4 audit + 3 new auth cases).
-- Auth surface returns structured `{code, message}` errors across all `/api/auth/*` and `requireAuth` 401s as of Phase 1.5a; `JWT_TTL_DAYS` is env-driven; failed logins emit a pino audit line with hashed email + IP (never the raw email or password).
+- 23 FE tests + 28 BE tests = 51 total, green (BE bumped from 20 to 28 in Phase 1.5b: 8 password-reset cases).
+- Auth surface (Phase 1.5a + 1.5b) supports register / login / logout / `/me` / password reset request / password reset confirm. All error paths return structured `{code, message}` (codes: `INVALID_FORMAT`, `EMAIL_TAKEN`, `INVALID_CREDENTIALS`, `NOT_AUTHENTICATED`, `INVALID_SESSION`, `USER_NOT_FOUND`, `INVALID_TOKEN`). `JWT_TTL_DAYS` is env-driven (default 7); `RESET_TTL_MIN` is env-driven (default 30). Failed logins emit a pino audit line with hashed email + IP (never the raw email or password). Reset link is logged via `request.log.info` in dev (Phase 4 swaps to mail provider).
 
 ---
 
@@ -41,8 +41,6 @@ SkillGauge/
 |-- IMPLEMENTATION_STATUS.md     # this file
 |-- README.md
 |-- LICENSE
-|-- audits/
-|   `-- code-duplication-audit-2026-04-19.md
 |-- backend/                     # Fastify 5 API (Phase 1)
 |   |-- src/
 |   |   |-- config/env.ts        # zod-validated env
@@ -107,6 +105,7 @@ SkillGauge/
 | HTTP server | ✓ done | `buildApp()` factory separate from `listen()` for `app.inject()` tests |
 | CORS + cookies | ✓ done | `@fastify/cors` with explicit origin + credentials; `@fastify/cookie` |
 | Auth (register/login/logout/me) | ✓ done (1.5a) | bcryptjs (10 rounds), JWT HS256 with TTL from `JWT_TTL_DAYS` env (default 7), httpOnly cookie `skillgauge_session`. All error paths return `{code, message}`; failed logins emit a pino audit line `{event, ip, emailHash, reason}` |
+| Password reset | ✓ done (1.5b) | `password_reset_tokens` collection (SHA-256 hashed token, TTL via `RESET_TTL_MIN` env default 30 min, single-use via atomic `markUsed`). Two routes — `reset-request` opaque-200, `reset-confirm` 200/400 INVALID_TOKEN/INVALID_FORMAT. FE: `/reset?token=` page + AuthModal "Forgot password?" inline form. Dev sink: link logged via `request.log.info`. **Note:** session invalidation on reset deferred to 1.5d (TODO marker in service). |
 | `requireAuth` preHandler | ✓ done | Verifies cookie, loads user onto `request.user`; 401 on missing/tampered |
 | Session lifecycle | ✓ done (1.1) | Create session + first question atomically; `totalQuestions` driven by `request.questionCount`; idempotent question fetch; batched answer response |
 | Session init contract | ✓ done (1.1) | `initSessionSchema` now accepts `interviewStyle` + `difficulty` + `roleLevel` + `questionCount` + optional `focusAreas`; persisted on the session doc and threaded into `QuestionContext` via `ctxFromSession()` |
@@ -196,7 +195,6 @@ SkillGauge/
 |-- IMPLEMENTATION_STATUS.md
 |-- README.md
 |-- LICENSE
-|-- audits/
 |-- web/                         # Next.js FE (exists)
 |-- backend/                     # Fastify BE (exists)
 `-- shared/                      # optional — lift when duplicated across FE+BE
@@ -245,12 +243,20 @@ SkillGauge/
 5. ✓ FE `ApiError.code` exposed for future code-based branching; `apiFetch` falls back to legacy `body.error`
 6. ✓ Tests: 23 FE + 20 BE = 43 green; verified end-to-end against MongoDB Atlas M0
 
-### Phase 1.5b–e (pending)
+### Phase 1.5b (✓ complete, 2026-04-25)
 
-1. Password reset flow (1.5b) — `password_reset_tokens` collection, `/api/auth/password/{reset-request,reset-confirm}`, dev-mode stdout sink for reset link
-2. Auth rate limit + lockout (1.5c) — counts the audit lines from 1.5a
-3. Session rotation via `jwt_epoch` (1.5d) — graceful global logout-everywhere
-4. Shared contracts cleanup (1.5e) — `backend/src/shared/contracts.ts`; sweep sessions/health to `{code, message}`
+1. ✓ `password_reset_tokens` collection with hashed token + TTL + single-use enforcement
+2. ✓ `POST /api/auth/password/reset-request` — opaque 200, dev stdout sink via `request.log.info`
+3. ✓ `POST /api/auth/password/reset-confirm` — bcrypts new password, marks token used; collapses 4 failure modes into `INVALID_TOKEN`
+4. ✓ FE: AuthModal 3-mode state machine (login / register / forgot) with opaque success message; new `/reset?token=...` page
+5. ✓ `RESET_TTL_MIN` env-driven (default 30); `usersRepo.updatePasswordHash` extracted (SRP)
+6. ✓ Tests: 8 new in `passwordReset.test.ts` (BE total: 20 → 28)
+
+### Phase 1.5c–e (pending)
+
+1. Auth rate limit + lockout (1.5c) — `@fastify/rate-limit` per-IP + `login_attempts` collection per-email
+2. Session rotation via `jwt_epoch` (1.5d) — graceful global logout-everywhere; closes the 1.5b TODO
+3. Shared contracts cleanup (1.5e) — `backend/src/shared/contracts.ts`; sweep sessions/health to `{code, message}`
 
 ### Phase 1.6 (pending — UI polish & visibility)
 

@@ -126,6 +126,28 @@ export async function logoutUser(): Promise<void> {
   await apiFetch<void>("/api/auth/logout", { method: "POST" });
 }
 
+// Phase 1.5b — password reset flow.
+// Request: opaque 200 even if the email isn't registered. Caller must NOT branch on
+// "did the email exist" — we deliberately don't expose that signal.
+export async function requestPasswordReset(email: string): Promise<void> {
+  await apiFetch<void>("/api/auth/password/reset-request", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+// Confirm: 200 on success; 400 INVALID_TOKEN on bad/expired/used token; 400 INVALID_FORMAT
+// on schema fail. Caller surfaces err.message directly.
+export async function confirmPasswordReset(
+  token: string,
+  newPassword: string,
+): Promise<void> {
+  await apiFetch<void>("/api/auth/password/reset-confirm", {
+    method: "POST",
+    body: JSON.stringify({ token, newPassword }),
+  });
+}
+
 // Returns null on 401 so the query-cache can store "unauthenticated" as a real state
 // instead of a thrown error — the FE treats "no cookie / expired cookie" identically.
 export async function fetchMe(): Promise<User | null> {

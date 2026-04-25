@@ -29,6 +29,18 @@ export async function ensureIndexes(): Promise<void> {
         },
       },
     );
+
+  // password_reset_tokens (Phase 1.5b):
+  // - tokenHash unique so a collision can't grant access to another user's reset.
+  // - expiresAt TTL → Mongo deletes the doc automatically once the moment passes,
+  //   so used + expired tokens disappear without a cron job. expireAfterSeconds=0
+  //   means "delete the moment expiresAt is in the past."
+  await db
+    .collection("password_reset_tokens")
+    .createIndex({ tokenHash: 1 }, { unique: true });
+  await db
+    .collection("password_reset_tokens")
+    .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 }
 
 // Allow `tsx src/db/indexes.ts` (or `node dist/db/indexes.js`) as a one-shot.
