@@ -363,6 +363,8 @@ Source: [backend/src/plugins/auth.ts](backend/src/plugins/auth.ts), [backend/src
 | `INVALID_SESSION` | 401 | `requireAuth` with expired / tampered / wrong-secret cookie |
 | `USER_NOT_FOUND` | 401 | `/api/me` when the JWT verifies but the user has been deleted |
 | `INVALID_TOKEN` | 400 | `/api/auth/password/reset-confirm` when the reset token is unknown / expired / already used / lost a race (Phase 1.5b) |
+| `ACCOUNT_LOCKED` | 423 | `/api/auth/login` when the per-email failure count reached the threshold (Phase 1.5c) |
+| `RATE_LIMIT_EXCEEDED` | 429 | Any rate-limited route (`/api/auth/login`, `/api/auth/password/reset-request`) when the per-IP cap is hit (Phase 1.5c) |
 
 Sessions and health routes still emit the legacy `{error}` shape — Phase 1.5e's shared-contracts pass will sweep them. The FE [`apiFetch`](web/services/api.ts) reads `body.code` + `body.message` first and falls back to `body.error`, so both shapes coexist on the wire today.
 
@@ -512,6 +514,104 @@ sequenceDiagram
 ```
 
 **(e) Known gap — closed in 1.5d.** Confirming a reset does **not** invalidate the user's existing session cookie today. If an attacker phished a reset link, the user's old cookie still works until natural JWT expiry. Phase 1.5d adds `jwtEpoch` per user; resetting the password will bump the epoch, which `requireAuth` checks → all old tokens become `INVALID_SESSION` instantly. The `password.service.ts` `confirmReset` already has a `// TODO:phase-1.5d` marker on the exact line where the bump will go.
+
+### 9.3 Rate limit + lockout (Phase 1.5c)
+
+Two layers of defense in front of the login surface, addressing two different attacker shapes:
+
+| Layer | Defends against | Storage | Counts by | Response |
+|---|---|---|---|---|
+| **Per-IP rate limit** | A single attacker source firing many requests | In-process LRU (via `@fastify/rate-limit`) | `request.ip` | 429 `RATE_LIMIT_EXCEEDED` |
+| **Per-email lockout** | A distributed credential-stuffing campaign across many IPs targeting one account | Mongo `login_attempts` collection (TTL'd) | `hashEmailForLog(email)` | 423 `ACCOUNT_LOCKED` |
+
+**Why both?** Per-IP alone fails when an attacker rotates IPs (botnets, residential proxies). Per-email alone fails when an attacker spreads thin across many emails. Together they create a defense matrix where neither shape of attack succeeds.
+
+**(a) Per-IP rate limit** ([plugin](backend/src/plugins/rateLimit.ts), [config](backend/src/app.ts)):
+
+```
+@fastify/rate-limit registered globally with `global: false` (opt-in).
+Routes opt in via `config.rateLimit: { max: AUTH_RATE_PER_MIN, timeWindow: "1 minute" }`.
+Hot routes today: POST /api/auth/login, POST /api/auth/password/reset-request.
+```
+
+Storage is the plugin's default in-process LRU keyed by IP. Trade-offs:
+- ✅ No extra service (Phase 1 is single-process; matches our "no new infra without justification" rule).
+- ❌ Counter resets on process restart and doesn't share across instances. **TODO:phase-4** swap to Redis (`@fastify/rate-limit` supports it natively, just a config change) when we deploy multi-instance.
+
+Body shape on 429 is hand-set via `errorResponseBuilder` so it matches our project-wide `{code, message}` contract — the plugin's default body would have been `{statusCode, error, message}`.
+
+**Why register, but not login**: register has a built-in throttle — a duplicate email returns 409 `EMAIL_TAKEN`, so a brute-force registrar can only create one account per (email × bcrypt-cost) ≈ 100ms. Login + reset-request are the actually-exposed credential-probe surfaces.
+
+**(b) Per-email soft lockout** ([service](backend/src/modules/auth/auth.service.ts), [repo](backend/src/db/repos/loginAttempts.ts)):
+
+Storage:
+
+| Field | Notes |
+|---|---|
+| `_id` | UUID — random handle |
+| `emailHash` | SHA-256-first-16-hex via `hashEmailForLog`. Same hash function as the failed-login pino audit line, so 1.5c's count and 1.5a's logs correlate during incident response |
+| `ip` | Forensics only — not used in the count |
+| `failedAt` | When |
+| `expiresAt` | TTL (Mongo auto-deletes after `LOGIN_LOCKOUT_WINDOW_MIN`) |
+
+Indexes: compound `(emailHash, expiresAt)` for fast `countActive`; standalone TTL on `expiresAt`.
+
+Login flow:
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant R as login route
+  participant S as authService
+  participant LA as loginAttemptsRepo
+  participant UR as usersRepo
+
+  U->>R: POST /api/auth/login {email, password}
+  R->>S: login(email, password, ip)
+  S->>LA: countActive(emailHash, now)
+
+  alt count >= threshold
+    LA-->>S: count
+    S-->>R: throw AuthError(ACCOUNT_LOCKED)
+    R-->>U: 423 {code, message}
+  else
+    LA-->>S: count < threshold
+    S->>UR: findByEmail(email)
+    alt user not found OR bcrypt fails
+      S->>LA: record({emailHash, ip, expiresAt: now+window})
+      S-->>R: throw AuthError(INVALID_CREDENTIALS)
+      R-->>U: 401 {code, message}
+    else success
+      S->>LA: clear(emailHash)  # wipe streak
+      S-->>R: User
+      R-->>U: 200 + Set-Cookie
+    end
+  end
+```
+
+**Three deliberate design choices**:
+
+1. **Lockout check runs *before* bcrypt.** Counting failures pre-hash means a locked account doesn't waste 100ms+ of CPU on each rejected attempt. Under attack this prevents a CPU-burn DoS that could otherwise saturate the BE just rejecting requests.
+
+2. **Unknown emails count toward the lockout too.** `ghost@example.com` failing 5 times locks out as `ghost@example.com` for the next 15 minutes. If we only counted known emails, an attacker could probe "this email locks → registered; this one keeps returning 401 forever → unregistered." Counting both eliminates the timing/behavior difference.
+
+3. **Successful login explicitly clears the streak** (not just relying on TTL). The TTL would clean up eventually, but `clear(emailHash)` after a verified password is the correct semantic: the user proved ownership, the streak is over. Otherwise a user who failed 4 times then succeeded then failed once would be at 5 active failures → lockout. Surprising and wrong.
+
+**(c) Status code semantics — why 423 vs 429**:
+
+- **`429 Too Many Requests`** is the per-IP layer. The IP is sending too many requests, period. Recovery: wait, or change networks.
+- **`423 Locked` (RFC 4918)** is the per-email layer. The *resource* (the account) is locked. Recovery: wait the window OR reset the password (the message tells the user both).
+
+The FE can branch on `response.status` to show the right UX. A future Phase 1.6 enhancement could show a countdown timer for 423s but a generic "try again" for 429s.
+
+**(d) Tunables** (env, all optional):
+
+| Var | Default | What it controls |
+|---|---|---|
+| `AUTH_RATE_PER_MIN` | 10 | Per-IP requests/minute on hot auth routes |
+| `LOGIN_LOCKOUT_THRESHOLD` | 5 | Failed attempts before soft lockout |
+| `LOGIN_LOCKOUT_WINDOW_MIN` | 15 | Window length AND lockout duration |
+
+**TODO:phase-4** ship rate-limit storage to Redis so multi-instance deploys share state. Until then, the limits multiply by N for an N-instance fleet — manageable but a footgun to track.
 
 ---
 
@@ -858,7 +958,7 @@ cd web && npm install && npm run dev                            # :3000
 | **1.5 — Auth hardening** (sub-parted) | partial | 1.5a ✓; 1.5b–e pending |
 | &nbsp;&nbsp;1.5a — JWT login polish | ✓ done (2026-04-25) | Cookie flags, error shapes, `JWT_TTL_DAYS` env, expired-token test, audit log |
 | &nbsp;&nbsp;1.5b — Password reset | ✓ done (2026-04-25) | Opaque request + single-use SHA-256-hashed TTL'd token + FE `/reset` route + AuthModal forgot inline form |
-| &nbsp;&nbsp;1.5c — Auth rate limits + lockout | pending | Per-IP + per-email throttles (counts 1.5a's audit lines) |
+| &nbsp;&nbsp;1.5c — Auth rate limits + lockout | ✓ done (2026-04-25) | `@fastify/rate-limit` per-IP (10/min) + `login_attempts` per-email (5 fails / 15 min → 423) |
 | &nbsp;&nbsp;1.5d — Session rotation | pending | `jwt_epoch` column; logout-everywhere |
 | &nbsp;&nbsp;1.5e — Contract cleanup | pending | Shared zod contracts, tighten service return types |
 | **1.6 — UI polish & visibility** (NEW) | pending | Logout in header, expanded homepage, LLM provider badge, chatroom sidebar foundation |

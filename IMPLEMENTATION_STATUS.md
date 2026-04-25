@@ -1,6 +1,6 @@
 # SkillGauge Implementation Status
 
-**Current phase:** Phase 1.5b — Password reset flow **(COMPLETE ✓)**
+**Current phase:** Phase 1.5c — Auth rate limit + lockout **(COMPLETE ✓)**
 **Last updated:** 2026-04-25
 
 ## Purpose
@@ -26,8 +26,10 @@ For the architectural reference see [ARCHITECTURE.md](ARCHITECTURE.md). For the 
 - Resume-change guard: starting a new interview while one is active prompts to archive the prior snapshot (localStorage) before overwriting the live session handoff blob.
 - The old `skillgauge/` RR7 prototype has been deleted (Phase 0b).
 - CI runs two parallel jobs (`web`, `backend`) — each install → typecheck → test → build.
-- 23 FE tests + 28 BE tests = 51 total, green (BE bumped from 20 to 28 in Phase 1.5b: 8 password-reset cases).
-- Auth surface (Phase 1.5a + 1.5b) supports register / login / logout / `/me` / password reset request / password reset confirm. All error paths return structured `{code, message}` (codes: `INVALID_FORMAT`, `EMAIL_TAKEN`, `INVALID_CREDENTIALS`, `NOT_AUTHENTICATED`, `INVALID_SESSION`, `USER_NOT_FOUND`, `INVALID_TOKEN`). `JWT_TTL_DAYS` is env-driven (default 7); `RESET_TTL_MIN` is env-driven (default 30). Failed logins emit a pino audit line with hashed email + IP (never the raw email or password). Reset link is logged via `request.log.info` in dev (Phase 4 swaps to mail provider).
+- 23 FE tests + 32 BE tests = 55 total, green (BE bumped from 28 to 32 in Phase 1.5c: 3 lockout + 1 rate-limit-shape cases).
+- Auth surface (Phase 1.5a + 1.5b + 1.5c) supports register / login / logout / `/me` / password reset request / password reset confirm with full defense-in-depth: per-IP rate limit + per-email soft lockout + structured `{code, message}` errors. Codes: `INVALID_FORMAT`, `EMAIL_TAKEN`, `INVALID_CREDENTIALS`, `NOT_AUTHENTICATED`, `INVALID_SESSION`, `USER_NOT_FOUND`, `INVALID_TOKEN`, `ACCOUNT_LOCKED`, `RATE_LIMIT_EXCEEDED`.
+- Env-driven knobs: `JWT_TTL_DAYS` (7), `RESET_TTL_MIN` (30), `AUTH_RATE_PER_MIN` (10), `LOGIN_LOCKOUT_THRESHOLD` (5), `LOGIN_LOCKOUT_WINDOW_MIN` (15).
+- Failed logins emit a pino audit line with hashed email + IP (never the raw email or password). Reset link is logged via `request.log.info` in dev (Phase 4 swaps to mail provider). Lockout check runs **before** bcrypt to deny CPU-burn attacks.
 
 ---
 
@@ -106,6 +108,7 @@ SkillGauge/
 | CORS + cookies | ✓ done | `@fastify/cors` with explicit origin + credentials; `@fastify/cookie` |
 | Auth (register/login/logout/me) | ✓ done (1.5a) | bcryptjs (10 rounds), JWT HS256 with TTL from `JWT_TTL_DAYS` env (default 7), httpOnly cookie `skillgauge_session`. All error paths return `{code, message}`; failed logins emit a pino audit line `{event, ip, emailHash, reason}` |
 | Password reset | ✓ done (1.5b) | `password_reset_tokens` collection (SHA-256 hashed token, TTL via `RESET_TTL_MIN` env default 30 min, single-use via atomic `markUsed`). Two routes — `reset-request` opaque-200, `reset-confirm` 200/400 INVALID_TOKEN/INVALID_FORMAT. FE: `/reset?token=` page + AuthModal "Forgot password?" inline form. Dev sink: link logged via `request.log.info`. **Note:** session invalidation on reset deferred to 1.5d (TODO marker in service). |
+| Auth rate limit + lockout | ✓ done (1.5c) | **Per-IP**: `@fastify/rate-limit` opt-in on login + reset-request (default 10/min via `AUTH_RATE_PER_MIN` env) → 429 `RATE_LIMIT_EXCEEDED`. **Per-email**: `login_attempts` collection (TTL'd, hashed email + IP) → 423 `ACCOUNT_LOCKED` after `LOGIN_LOCKOUT_THRESHOLD` failures (default 5) in `LOGIN_LOCKOUT_WINDOW_MIN` (default 15). Lockout check runs pre-bcrypt; counts unknown emails too (no enumeration). Successful login wipes the streak. |
 | `requireAuth` preHandler | ✓ done | Verifies cookie, loads user onto `request.user`; 401 on missing/tampered |
 | Session lifecycle | ✓ done (1.1) | Create session + first question atomically; `totalQuestions` driven by `request.questionCount`; idempotent question fetch; batched answer response |
 | Session init contract | ✓ done (1.1) | `initSessionSchema` now accepts `interviewStyle` + `difficulty` + `roleLevel` + `questionCount` + optional `focusAreas`; persisted on the session doc and threaded into `QuestionContext` via `ctxFromSession()` |
@@ -252,11 +255,18 @@ SkillGauge/
 5. ✓ `RESET_TTL_MIN` env-driven (default 30); `usersRepo.updatePasswordHash` extracted (SRP)
 6. ✓ Tests: 8 new in `passwordReset.test.ts` (BE total: 20 → 28)
 
-### Phase 1.5c–e (pending)
+### Phase 1.5c (✓ complete, 2026-04-25)
 
-1. Auth rate limit + lockout (1.5c) — `@fastify/rate-limit` per-IP + `login_attempts` collection per-email
-2. Session rotation via `jwt_epoch` (1.5d) — graceful global logout-everywhere; closes the 1.5b TODO
-3. Shared contracts cleanup (1.5e) — `backend/src/shared/contracts.ts`; sweep sessions/health to `{code, message}`
+1. ✓ `@fastify/rate-limit` per-IP cap on login + reset-request (default 10/min)
+2. ✓ `login_attempts` collection (TTL'd) for per-email failure counter
+3. ✓ Lockout check pre-bcrypt; unknown emails count too; success wipes the streak
+4. ✓ 423 `ACCOUNT_LOCKED` distinct from 429 `RATE_LIMIT_EXCEEDED` for clear FE recovery UX
+5. ✓ 4 new tests (3 lockout + 1 rate-limit shape); BE total 28 → 32
+
+### Phase 1.5d–e (pending)
+
+1. Session rotation via `jwt_epoch` (1.5d) — graceful global logout-everywhere; closes the 1.5b TODO
+2. Shared contracts cleanup (1.5e) — `backend/src/shared/contracts.ts`; sweep sessions/health to `{code, message}`
 
 ### Phase 1.6 (pending — UI polish & visibility)
 

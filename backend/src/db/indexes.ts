@@ -41,6 +41,18 @@ export async function ensureIndexes(): Promise<void> {
   await db
     .collection("password_reset_tokens")
     .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+  // login_attempts (Phase 1.5c):
+  // - (emailHash, expiresAt) compound supports countActive() — count all unexpired
+  //   failures for a given email in one indexed query, hot path on every login.
+  // - expiresAt TTL auto-deletes failures after the lockout window passes, keeping the
+  //   collection bounded with no background job.
+  await db
+    .collection("login_attempts")
+    .createIndex({ emailHash: 1, expiresAt: 1 });
+  await db
+    .collection("login_attempts")
+    .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 }
 
 // Allow `tsx src/db/indexes.ts` (or `node dist/db/indexes.js`) as a one-shot.

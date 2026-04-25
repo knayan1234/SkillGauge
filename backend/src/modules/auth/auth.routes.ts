@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { env } from "@/config/env";
 import {
   clearSessionCookie,
   requireAuth,
@@ -16,6 +17,13 @@ import {
   PasswordResetError,
   passwordResetService,
 } from "./password.service";
+
+// Phase 1.5c — rate-limit config object shared by routes that need per-IP throttling.
+// We declare it once so login + reset-request share identical policy and a future
+// auditor can grep for `RATE_LIMIT_AUTH` to find every protected route.
+const RATE_LIMIT_AUTH = {
+  rateLimit: { max: env.AUTH_RATE_PER_MIN, timeWindow: "1 minute" },
+} as const;
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.post("/api/auth/register", async (request, reply) => {
@@ -41,7 +49,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.post("/api/auth/login", async (request, reply) => {
+  app.post("/api/auth/login", { config: RATE_LIMIT_AUTH }, async (request, reply) => {
     const parsed = credentialsSchema.safeParse(request.body);
     if (!parsed.success) {
       // Try to surface a hashed correlator even on malformed payloads when an email-like
@@ -68,13 +76,15 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const user = await authService.login(
         parsed.data.email,
         parsed.data.password,
+        request.ip,
       );
       setSessionCookie(reply, signSessionToken(user.id));
       return reply.send({ user });
     } catch (err) {
       if (err instanceof AuthError) {
         // Audit log: hashed email + IP + reason. Never the raw email or password. Phase 1.5c
-        // will count these per (ip, emailHash) for rate limiting + soft lockout.
+        // counts these (via the login_attempts collection, written by authService.login)
+        // for the per-email lockout decision.
         request.log.warn(
           {
             event: "auth.login.failed",
@@ -84,7 +94,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           },
           "login failed",
         );
-        return reply.code(401).send({ code: err.code, message: err.message });
+        // 423 Locked for soft lockout (RFC 4918) — distinct from 429 (too many requests
+        // / rate limit) so the FE can show the right message: "wait 15 minutes or reset."
+        const status = err.code === "ACCOUNT_LOCKED" ? 423 : 401;
+        return reply.code(status).send({ code: err.code, message: err.message });
       }
       throw err;
     }
@@ -104,7 +117,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   // Both routes are public (no requireAuth). 1.5c will add per-IP/per-email rate limits.
   // TODO:phase-4 swap the dev-mode stdout sink for transactional mail.
 
-  app.post("/api/auth/password/reset-request", async (request, reply) => {
+  app.post(
+    "/api/auth/password/reset-request",
+    { config: RATE_LIMIT_AUTH },
+    async (request, reply) => {
     const parsed = resetRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       // Bad-format requests still get 200 — we don't want to leak "email shape was wrong"

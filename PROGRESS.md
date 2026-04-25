@@ -2,9 +2,9 @@
 
 Living document tracking every change made during the end-to-end build. Newest entries at the top within each phase.
 
-**Current phase:** Phase 1.5b — Password reset flow **(COMPLETE ✓)** (opaque request, single-use TTL'd token, dev stdout sink, FE `/reset` route + AuthModal "Forgot password?" inline form)
-**Next phase:** Phase 1.5c — Auth rate-limit + lockout
-**Then:** 1.5d session rotation → 1.5e contract cleanup → **Phase 1.6 UI polish & visibility** → Phase 2 AI Intelligence (2b prompts first → 2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
+**Current phase:** Phase 1.5c — Auth rate limit + lockout **(COMPLETE ✓)** (per-IP rate limit via `@fastify/rate-limit`, per-email soft lockout via `login_attempts` collection with TTL)
+**Next phase:** Phase 1.5d — Session rotation (`jwt_epoch`)
+**Then:** 1.5e contract cleanup → **Phase 1.6 UI polish & visibility** → Phase 2 AI Intelligence (2b prompts first → 2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
 **Started:** 2026-04-18
 **Phase 0a finished:** 2026-04-18
 **Phase 0b finished:** 2026-04-19
@@ -12,6 +12,7 @@ Living document tracking every change made during the end-to-end build. Newest e
 **Phase 1.1 finished:** 2026-04-20
 **Phase 1.5a finished:** 2026-04-25
 **Phase 1.5b finished:** 2026-04-25
+**Phase 1.5c finished:** 2026-04-25
 
 ---
 
@@ -531,10 +532,84 @@ Bridges Phase 1 → Phase 2. Keeps all work local, no external keys. Small, merg
 
 ---
 
-### 1.5c — Auth rate limiting + lockout
-- [ ] Plugin: per-IP rate limit on `/api/auth/login` and `/reset-request` (e.g., 10/min)
-- [ ] Per-email failure counter → soft lockout after N consecutive failures in a window
-- [ ] Add tests for both
+### 1.5c — Auth rate limiting + lockout ✓
+
+#### Goals
+- ✓ Per-IP rate limit on `/api/auth/login` + `/api/auth/password/reset-request` via `@fastify/rate-limit` (default 10/min, env-driven `AUTH_RATE_PER_MIN`)
+- ✓ Per-email soft lockout via new `login_attempts` collection with TTL (default 5 failures in 15 min → 423 `ACCOUNT_LOCKED`, env-driven `LOGIN_LOCKOUT_THRESHOLD` + `LOGIN_LOCKOUT_WINDOW_MIN`)
+- ✓ Lockout check runs **before** bcrypt — denies attackers a CPU-burn vector
+- ✓ Lockout counts unknown emails too — denies enumeration via behavior-difference probing
+- ✓ Successful login wipes the failure streak (explicit `clear` rather than waiting for TTL)
+- ✓ Tests for both: 3 lockout cases + 1 rate-limit response-shape case
+
+#### Final verification (2026-04-25)
+
+| Command | Status |
+|---|---|
+| `cd backend && npx tsc --noEmit` | ✓ clean |
+| `cd backend && npm test` | ✓ 32/32 pass (was 28 — +4 in `rateLimit.test.ts`) |
+| `cd backend && npm run build` | ✓ `dist/` emitted |
+| `cd web && npx tsc --noEmit && npm test -- --ci && npm run build` | ✓ unchanged (FE not touched in 1.5c) |
+
+#### Error contract additions
+
+| Endpoint | Status | Body |
+|---|---|---|
+| `POST /api/auth/login` (or any rate-limited route) over IP cap | 429 | `{code: "RATE_LIMIT_EXCEEDED", message: "Too many requests. Try again in <window>."}` |
+| `POST /api/auth/login` with email at lockout threshold | 423 | `{code: "ACCOUNT_LOCKED", message: "Too many failed attempts. Try again in <N> minutes or reset your password."}` |
+
+`429` is the standard "you, the IP, are sending too many requests" response (per-process LRU). `423 Locked` (RFC 4918) is the dedicated "this account is in soft-lockout" response — distinct so the FE can show "wait <N> minutes or reset" rather than a generic "try again."
+
+#### New collection: `login_attempts`
+
+`{_id, emailHash, ip, failedAt, expiresAt}`. Indexes: compound `(emailHash, expiresAt)` for fast countActive(); TTL on `expiresAt` for auto-cleanup. Hashed email (SHA-256 first-16-hex via `hashEmailForLog`) — never the raw email. Same hashing function as the failed-login audit log so 1.5c's count and 1.5a's log lines are correlatable in a debug session.
+
+#### New env vars (all optional, sensible defaults)
+
+| Var | Default | Purpose |
+|---|---|---|
+| `AUTH_RATE_PER_MIN` | 10 | Per-IP requests/min on auth hot routes |
+| `LOGIN_LOCKOUT_THRESHOLD` | 5 | Failed attempts before soft lockout |
+| `LOGIN_LOCKOUT_WINDOW_MIN` | 15 | Rolling-window length AND lockout duration (TTL on each failure record) |
+
+#### Changelog
+
+- **2026-04-25** — Phase 1.5c shipped. PROGRESS.md, IMPLEMENTATION_STATUS.md, ARCHITECTURE.md, requirements.md updated.
+- **2026-04-25** — Added `@fastify/rate-limit ^10.4.x` (or whichever current major). Justified: hand-rolling sliding-window in Mongo with TTL is ~80 LOC + race-prone; the plugin is 4 LOC of config and battle-tested. In-process LRU storage is fine for Phase 1's single-process deploy. **TODO:phase-4** swap to a Redis store when we go multi-instance.
+- **2026-04-25** — New plugin file [backend/src/plugins/rateLimit.ts](backend/src/plugins/rateLimit.ts) registers `@fastify/rate-limit` with `global: false` (opt-in per route) and a custom `errorResponseBuilder` that returns our project-wide `{code: "RATE_LIMIT_EXCEEDED", message}` shape. Routes opt in via `config.rateLimit`.
+- **2026-04-25** — Login route + password reset-request route both wired with `RATE_LIMIT_AUTH` config object. Register is intentionally NOT capped — its 409 EMAIL_TAKEN already throttles abuse and dev workflows often register multiple test accounts.
+- **2026-04-25** — New repo [backend/src/db/repos/loginAttempts.ts](backend/src/db/repos/loginAttempts.ts) with `record`, `countActive`, `clear`. The collection is bounded by the TTL index — no background job needed.
+- **2026-04-25** — `authService.login` extended: pre-bcrypt `loginAttemptsRepo.countActive(emailHash)` check; on `>= threshold` throws new `AuthError("ACCOUNT_LOCKED", ...)`. Failed bcrypt also records via `_recordFailure(emailHash, ip)`. Successful login calls `clear(emailHash)`.
+- **2026-04-25** — Login route maps `ACCOUNT_LOCKED` to **423** (distinct from 401 `INVALID_CREDENTIALS` and 429 `RATE_LIMIT_EXCEEDED`).
+- **2026-04-25** — Test infrastructure: setup.ts overrides `AUTH_RATE_PER_MIN=10000` so the lockout suite (which fires 10+ logins per case) doesn't trip the IP limiter. The dedicated rate-limit test spins up a stand-alone Fastify with `max: 2` to verify the 429 response shape.
+- **2026-04-25** — Backend test count: 28 → 32.
+
+#### Files created
+- [backend/src/plugins/rateLimit.ts](backend/src/plugins/rateLimit.ts)
+- [backend/src/db/repos/loginAttempts.ts](backend/src/db/repos/loginAttempts.ts)
+- [backend/tests/rateLimit.test.ts](backend/tests/rateLimit.test.ts)
+
+#### Files modified
+- [backend/package.json](backend/package.json) — `+ @fastify/rate-limit`
+- [backend/src/config/env.ts](backend/src/config/env.ts) — `AUTH_RATE_PER_MIN`, `LOGIN_LOCKOUT_THRESHOLD`, `LOGIN_LOCKOUT_WINDOW_MIN`
+- [backend/.env.example](backend/.env.example) — same
+- [backend/src/db/indexes.ts](backend/src/db/indexes.ts) — `login_attempts` indexes
+- [backend/src/app.ts](backend/src/app.ts) — register the rate-limit plugin
+- [backend/src/modules/auth/auth.service.ts](backend/src/modules/auth/auth.service.ts) — lockout check + failure recording + streak clear; `AuthError.code` gains `ACCOUNT_LOCKED`
+- [backend/src/modules/auth/auth.routes.ts](backend/src/modules/auth/auth.routes.ts) — login + reset-request opt-in to rate limit; login maps `ACCOUNT_LOCKED` → 423
+- [backend/tests/setup.ts](backend/tests/setup.ts) — `AUTH_RATE_PER_MIN=10000` override
+
+#### Notable gotchas
+1. **Why 423 vs 429**: `423 Locked` (RFC 4918) means "this resource (the account) is locked." `429 Too Many Requests` means "you (the IP) are sending too many requests." They're orthogonal and a request can hit either independently — distinguishing them lets the FE show the right recovery UX.
+2. **Pre-bcrypt lockout check**: order matters. Counting failures *before* hashing means a locked account doesn't waste CPU on bcrypt. Under attack this is the difference between "the server is slow" and "the server is down."
+3. **Unknown emails count too**: a registered email that locks after 5 failures looks identical to an unregistered email that locks after 5 failures. No enumeration channel via behavior-difference.
+4. **In-process LRU**: works for single-process Phase 1 deploy. **TODO:phase-4** swap to Redis when scaling — `@fastify/rate-limit` supports both natively, just a config change.
+5. **Test isolation**: `process.env.AUTH_RATE_PER_MIN = "10000"` in setup.ts must be set BEFORE env.ts is imported (it's parsed once at module load). Setup.ts runs first via Jest's `setupFiles` config, so this works.
+
+#### TODO markers planted
+```ts
+// TODO:phase-4 swap @fastify/rate-limit's in-process store for Redis when multi-instance
+```
 
 ### 1.5d — Session rotation
 - [ ] `jwt_epoch` column on `users`; every token signs with current epoch, `requireAuth` rejects if stale
