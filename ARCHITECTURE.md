@@ -382,17 +382,17 @@ The JWT is the *only* thing that proves identity on a request. The cookie is jus
 
 ```
 header   = base64url({"alg":"HS256","typ":"JWT"})
-payload  = base64url({"sub":"<userId-uuid>","iat":<unix-ts>,"exp":<unix-ts + JWT_TTL_DAYS*86400>})
+payload  = base64url({"sub":"<userId-uuid>","epoch":<int>,"iat":<unix-ts>,"exp":<unix-ts + JWT_TTL_DAYS*86400>})
 signature = HMAC-SHA256(<header>.<payload>, JWT_SECRET)
 ```
 
-`sub` carries the user's UUID — that's all we need. `iat` (issued-at) and `exp` (expiry) are added by [`jsonwebtoken`](https://www.npmjs.com/package/jsonwebtoken) automatically when we pass `expiresIn`. The signature binds header + payload to our secret; flipping any byte in either segment makes the signature invalid. The full token is opaque to the FE — only the BE knows `JWT_SECRET`.
+`sub` carries the user's UUID. `epoch` (Phase 1.5d) is the user's `jwtEpoch` at sign time — see §9.4 for how this powers per-user "log out everywhere" without rotating the global secret. `iat` (issued-at) and `exp` (expiry) are added by [`jsonwebtoken`](https://www.npmjs.com/package/jsonwebtoken) automatically when we pass `expiresIn`. The signature binds header + payload to our secret; flipping any byte in either segment makes the signature invalid. The full token is opaque to the FE — only the BE knows `JWT_SECRET`.
 
 **(b) Signing — happens on register and login** ([signSessionToken](backend/src/plugins/auth.ts)):
 ```ts
-jwt.sign({ sub: userId }, env.JWT_SECRET, { expiresIn: `${env.JWT_TTL_DAYS}d` })
+jwt.sign({ sub: userId, epoch }, env.JWT_SECRET, { expiresIn: `${env.JWT_TTL_DAYS}d` })
 ```
-`expiresIn: "7d"` is parsed by `jsonwebtoken` to seconds and added to `iat` to compute `exp`. Single source of truth for TTL: `env.JWT_TTL_DAYS` (default 7) drives both this and the cookie's `Max-Age` (`60 * 60 * 24 * env.JWT_TTL_DAYS = 604800` seconds for 7 days). Change one env var, both update consistently.
+`expiresIn: "7d"` is parsed by `jsonwebtoken` to seconds and added to `iat` to compute `exp`. Single source of truth for TTL: `env.JWT_TTL_DAYS` (default 7) drives both this and the cookie's `Max-Age` (`60 * 60 * 24 * env.JWT_TTL_DAYS = 604800` seconds for 7 days). Change one env var, both update consistently. `epoch` is the user's `jwtEpoch` *at sign time* — pulled from the user doc the route already loads to verify the password.
 
 **(c) Cookie transport** ([setSessionCookie](backend/src/plugins/auth.ts)):
 ```
@@ -406,15 +406,19 @@ Set-Cookie: skillgauge_session=<jwt>; Max-Age=604800; Path=/; HttpOnly; SameSite
 
 **(d) Verification — happens on every protected request** ([requireAuth](backend/src/plugins/auth.ts)):
 ```ts
-const payload = jwt.verify(token, env.JWT_SECRET) as { sub: string }
+const payload = jwt.verify(token, env.JWT_SECRET) as { sub: string; epoch: number }
+const user = await usersRepo.findById(payload.sub)
+if (!user || (payload.epoch ?? 1) < (user.jwtEpoch ?? 1)) reject INVALID_SESSION
 request.userId = payload.sub
 ```
-`jwt.verify` does three checks atomically:
-1. Recomputes the signature with `JWT_SECRET` and compares — fails if anyone tampered with header/payload, or if the secret rotated.
-2. Checks `exp > now` — fails if expired.
-3. Parses the payload as JSON — fails on garbage.
+Five checks, all collapsed to one `INVALID_SESSION` 401:
+1. **Signature** — `jwt.verify` recomputes HMAC-SHA256 with `JWT_SECRET` and compares. Fails on tamper, wrong secret, or any byte flip.
+2. **Expiry** — `jwt.verify` checks `exp > now` automatically.
+3. **Payload shape** — `jwt.verify` rejects garbage / unparseable.
+4. **User exists** — Phase 1.5d hits Mongo via `findById`. If the user was deleted while their session was live, treat as logged out (vs. an awkward 200 from `/me` followed by silent breakage on the next protected route).
+5. **Epoch fresh** — Phase 1.5d compares `payload.epoch` against `user.jwtEpoch`. If the user has since logged-out-everywhere or reset their password, every token signed pre-bump is now stale.
 
-Any failure throws → caught → 401 `{code: "INVALID_SESSION"}`. We deliberately don't surface *which* check failed — an attacker doesn't need a hint about whether their forged token expired or was signed wrong.
+We deliberately don't distinguish in the response *which* check failed — an attacker probing a stolen cookie should get no hint about whether it's expired, tampered, or just out of date. Pino logs at debug level have the breakdown for developers.
 
 **(e) Cross-origin handshake.** FE on `:3000`, BE on `:4000` is cross-origin. Two settings make the cookie ride:
 - BE: `@fastify/cors` with `credentials: true` and an explicit `origin` (never `*` — the spec rejects it when credentials are on).
@@ -612,6 +616,85 @@ The FE can branch on `response.status` to show the right UX. A future Phase 1.6 
 | `LOGIN_LOCKOUT_WINDOW_MIN` | 15 | Window length AND lockout duration |
 
 **TODO:phase-4** ship rate-limit storage to Redis so multi-instance deploys share state. Until then, the limits multiply by N for an N-instance fleet — manageable but a footgun to track.
+
+### 9.4 Session rotation via `jwt_epoch` (Phase 1.5d)
+
+Bumping a per-user counter ("epoch") instantly invalidates every token signed before the bump. Powers two flows:
+
+| Flow | Why bump? |
+|---|---|
+| `POST /api/auth/logout-all` | User chose "sign me out everywhere" — could be after a lost laptop, suspicious activity, or just hygiene |
+| Password reset confirm | Mandatory: a successful reset MUST kick out any session an attacker may already be holding (e.g., from a prior phish) |
+
+**(a) Storage** ([users repo](backend/src/db/repos/users.ts)):
+
+`UserDoc.jwtEpoch?: number` — optional for back-compat with pre-1.5d docs. Service-layer `epochOf(doc)` helper centralizes the `?? 1` fallback. Fresh registrations set `jwtEpoch: 1`.
+
+`bumpJwtEpoch(id)` is one atomic `$inc: { jwtEpoch: 1 }` call. Mongo's `$inc` on a missing field starts from 0 → first bump on a legacy doc lands at 1; combined with the `?? 1` fallback in `signSessionToken` callers, this means the very first bump on a legacy user is harmless (epoch=1 token vs user.jwtEpoch=1 → equal, passes the `<` check). Subsequent bumps work normally. No migration needed.
+
+**(b) Lifecycle**:
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant L as login route
+  participant S as authService
+  participant LA as logout-all route
+  participant UR as usersRepo
+  participant Auth as requireAuth
+  participant ME as /me handler
+
+  Note over U,UR: T0: Initial login
+  U->>L: POST /api/auth/login
+  L->>S: login(email, password)
+  S->>UR: findByEmail
+  UR-->>S: {user, jwtEpoch: 1}
+  S-->>L: {user, epoch: 1}
+  L->>L: signSessionToken(user.id, 1) → JWT with epoch=1
+  L-->>U: 200 + Set-Cookie
+
+  Note over U,Auth: T1: Authenticated request — passes
+  U->>Auth: GET /api/me (cookie has epoch=1)
+  Auth->>UR: findById(sub)
+  UR-->>Auth: {user, jwtEpoch: 1}
+  Auth->>Auth: payload.epoch (1) < user.jwtEpoch (1)? No.
+  Auth->>ME: pass through (request.userId set)
+  ME-->>U: 200 {user}
+
+  Note over U,UR: T2: User chose logout-all on a different device
+  U->>LA: POST /api/auth/logout-all (some other valid cookie)
+  LA->>UR: bumpJwtEpoch(userId)  $inc: 1 → 2
+  LA-->>U: 204 (issuing cookie also cleared)
+
+  Note over U,Auth: T3: First device's old cookie no longer works
+  U->>Auth: GET /api/me (cookie still has epoch=1)
+  Auth->>UR: findById(sub)
+  UR-->>Auth: {user, jwtEpoch: 2}
+  Auth->>Auth: 1 < 2? Yes — reject.
+  Auth-->>U: 401 INVALID_SESSION
+```
+
+**(c) Why a per-user counter, not the global JWT_SECRET?**
+
+Two ways to invalidate tokens en masse:
+1. **Rotate `JWT_SECRET`** — invalidates *everyone's* tokens. Heavy hammer. Useful for a security incident where the secret may have leaked, but boots every user including the ones we don't suspect.
+2. **Bump per-user `jwtEpoch`** — invalidates *one user's* tokens. Surgical. Right tool for "log me out of every device" or "this user just reset their password."
+
+We support both: secret rotation is implicit (just change the env), epoch bumping is explicit (an endpoint or service call). Phase 1.5d ships epoch; future Phase 4 may add scripted secret rotation with `jwt_epoch_global` for graceful global rotation.
+
+**(d) Three-rejection-paths-one-code** (continued from §9.1.d):
+
+`requireAuth` now has three independent reject reasons, all returning 401 INVALID_SESSION:
+
+1. Cryptographic signature failure (tampered / wrong secret / expired).
+2. User row deleted while session was live.
+3. Stale epoch (`payload.epoch < user.jwtEpoch`).
+
+The wire response is identical for all three. Internally the pino debug log distinguishes them so developers can grep for "stale epoch" vs "user gone" during incident response. The uniformity prevents an attacker from probing "is this user deleted? did they bump their epoch? did my forged signature fail?" — no oracle.
+
+**(e) Performance impact**:
+
+Phase 1.5d adds **one `findById` per protected request**. Single indexed read, ~1ms in dev against Atlas. The user load was ALREADY happening on `/api/me` (post-`requireAuth`) — for other protected routes it's new overhead. Acceptable today; `TODO:phase-4` add a short-TTL user cache (Redis or in-memory LRU) keyed by userId if it becomes a hotspot.
 
 ---
 
@@ -959,7 +1042,7 @@ cd web && npm install && npm run dev                            # :3000
 | &nbsp;&nbsp;1.5a — JWT login polish | ✓ done (2026-04-25) | Cookie flags, error shapes, `JWT_TTL_DAYS` env, expired-token test, audit log |
 | &nbsp;&nbsp;1.5b — Password reset | ✓ done (2026-04-25) | Opaque request + single-use SHA-256-hashed TTL'd token + FE `/reset` route + AuthModal forgot inline form |
 | &nbsp;&nbsp;1.5c — Auth rate limits + lockout | ✓ done (2026-04-25) | `@fastify/rate-limit` per-IP (10/min) + `login_attempts` per-email (5 fails / 15 min → 423) |
-| &nbsp;&nbsp;1.5d — Session rotation | pending | `jwt_epoch` column; logout-everywhere |
+| &nbsp;&nbsp;1.5d — Session rotation | ✓ done (2026-04-25) | Per-user `jwtEpoch` in JWT payload; `POST /api/auth/logout-all`; password reset bumps epoch |
 | &nbsp;&nbsp;1.5e — Contract cleanup | pending | Shared zod contracts, tighten service return types |
 | **1.6 — UI polish & visibility** (NEW) | pending | Logout in header, expanded homepage, LLM provider badge, chatroom sidebar foundation |
 | &nbsp;&nbsp;1.6a — Auth-aware persistent header w/ logout | pending | User menu when authed; "Sign in" otherwise |

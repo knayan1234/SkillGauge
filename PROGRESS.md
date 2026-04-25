@@ -2,9 +2,9 @@
 
 Living document tracking every change made during the end-to-end build. Newest entries at the top within each phase.
 
-**Current phase:** Phase 1.5c — Auth rate limit + lockout **(COMPLETE ✓)** (per-IP rate limit via `@fastify/rate-limit`, per-email soft lockout via `login_attempts` collection with TTL)
-**Next phase:** Phase 1.5d — Session rotation (`jwt_epoch`)
-**Then:** 1.5e contract cleanup → **Phase 1.6 UI polish & visibility** → Phase 2 AI Intelligence (2b prompts first → 2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
+**Current phase:** Phase 1.5d — Session rotation **(COMPLETE ✓)** (`jwtEpoch` per-user, JWT carries epoch, `requireAuth` rejects on mismatch, `logout-all` route, password reset bumps epoch)
+**Next phase:** Phase 1.5e — Shared contracts + sessions error sweep
+**Then:** **Phase 1.6 UI polish & visibility** → Phase 2 AI Intelligence (2b prompts first → 2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
 **Started:** 2026-04-18
 **Phase 0a finished:** 2026-04-18
 **Phase 0b finished:** 2026-04-19
@@ -13,6 +13,7 @@ Living document tracking every change made during the end-to-end build. Newest e
 **Phase 1.5a finished:** 2026-04-25
 **Phase 1.5b finished:** 2026-04-25
 **Phase 1.5c finished:** 2026-04-25
+**Phase 1.5d finished:** 2026-04-25
 
 ---
 
@@ -611,10 +612,62 @@ Bridges Phase 1 → Phase 2. Keeps all work local, no external keys. Small, merg
 // TODO:phase-4 swap @fastify/rate-limit's in-process store for Redis when multi-instance
 ```
 
-### 1.5d — Session rotation
-- [ ] `jwt_epoch` column on `users`; every token signs with current epoch, `requireAuth` rejects if stale
-- [ ] Logout-everywhere button in a (minimal) settings page → increments epoch
-- [ ] Rotate epoch on password change
+### 1.5d — Session rotation ✓
+
+#### Goals
+- ✓ `jwtEpoch: number` field on `users` (default 1 for new registrations; legacy docs read as 1 via `epochOf` helper)
+- ✓ JWT payload extended: `{ sub, epoch }`. `signSessionToken(userId, epoch)` requires both; the route layer destructures `{user, epoch}` from `authService.register/login` and passes it through.
+- ✓ `requireAuth` does the epoch check after signature verify: `payload.epoch < user.jwtEpoch` → 401 INVALID_SESSION (same code as expired/tampered — no leak about which check failed)
+- ✓ New `POST /api/auth/logout-all` (requires auth, bumps epoch, clears cookie, returns 204) — closes the foundation for a Phase 1.6 settings UI
+- ✓ Password reset confirm now bumps the epoch — closes the known gap from 1.5b (a phished reset link no longer leaves the original session live)
+- ✓ 4 new auth.test.ts cases: stale epoch token rejected; logout-all bumps + invalidates issuing cookie; logout-all without auth → NOT_AUTHENTICATED; password reset bumps epoch
+
+#### Final verification (2026-04-25)
+
+| Command | Status |
+|---|---|
+| `cd backend && npx tsc --noEmit` | ✓ clean |
+| `cd backend && npm test` | ✓ 36/36 pass (was 32 — +4 in `auth.test.ts`) |
+| `cd backend && npm run build` | ✓ `dist/` emitted |
+| `cd web && npx tsc --noEmit && npm test -- --ci && npm run build` | ✓ unchanged (FE not touched in 1.5d) |
+
+#### How epoch rotation works in two sentences
+Bumping a user's `jwtEpoch` from N → N+1 makes every token signed with `epoch=N` fail `requireAuth`'s `payload.epoch < user.jwtEpoch` check on the next request. This is global instant logout for that user, requires no token tracking, and is cheap (one Mongo `$inc`).
+
+#### Where epoch bumps happen today
+1. `POST /api/auth/logout-all` (the user explicitly chose to sign out everywhere)
+2. `passwordResetService.confirmReset` (security-critical — a successful reset must invalidate any session an attacker may have hijacked)
+
+#### Changelog
+
+- **2026-04-25** — Phase 1.5d shipped. PROGRESS.md, IMPLEMENTATION_STATUS.md, ARCHITECTURE.md, requirements.md updated.
+- **2026-04-25** — `UserDoc.jwtEpoch?: number` (optional for back-compat with pre-1.5d docs). Service-layer `epochOf(doc)` helper centralizes the `?? 1` fallback so a future "backfill all rows" migration is a one-line change.
+- **2026-04-25** — `usersRepo.bumpJwtEpoch(id)` performs an atomic `$inc: { jwtEpoch: 1 }`. Mongo treats `$inc` on missing field as starting from 0 → first ever bump on a legacy doc lands at 1, but since fresh signs still use `epoch ?? 1`, that token is still ≥ user.jwtEpoch. Subsequent bumps work normally.
+- **2026-04-25** — `signSessionToken(userId, epoch)` mandates both args. Old single-arg calls fail typecheck (caught at compile time). Routes destructure `{user, epoch}` from `AuthResult` returned by service.
+- **2026-04-25** — `requireAuth` reorganized: signature verify → user lookup → epoch compare. Three rejection paths, all returning 401 INVALID_SESSION. The pino-level breakdown is available in dev logs but the wire response is uniform — no oracle for attackers.
+- **2026-04-25** — User-not-found path moved into `requireAuth` (was in `/me` handler). If a JWT is valid AND signed by us but the row is gone, treat as logged out — same 401 INVALID_SESSION.
+- **2026-04-25** — Password reset confirm `bumpJwtEpoch` call closes the known gap from §1.5b. The TODO marker in `password.service.ts` is replaced with the actual call.
+- **2026-04-25** — Backend test count: 32 → 36.
+
+#### Files modified
+- [backend/src/db/repos/users.ts](backend/src/db/repos/users.ts) — `UserDoc.jwtEpoch?: number`; new `bumpJwtEpoch(id)` method
+- [backend/src/plugins/auth.ts](backend/src/plugins/auth.ts) — JWT payload includes epoch; `signSessionToken(userId, epoch)`; `requireAuth` does epoch check + user-not-found rejection
+- [backend/src/modules/auth/auth.service.ts](backend/src/modules/auth/auth.service.ts) — `AuthResult` interface; `register` initializes `jwtEpoch: 1`; both methods return `{user, epoch}`; `epochOf` helper
+- [backend/src/modules/auth/auth.routes.ts](backend/src/modules/auth/auth.routes.ts) — destructure `{user, epoch}` and pass to `signSessionToken`; new `POST /api/auth/logout-all` route
+- [backend/src/modules/auth/password.service.ts](backend/src/modules/auth/password.service.ts) — `confirmReset` calls `bumpJwtEpoch` (TODO closed)
+- [backend/tests/auth.test.ts](backend/tests/auth.test.ts) — 4 new tests for epoch rotation
+
+#### Notable gotchas
+1. **Why default-to-1 instead of backfill on read**: storing `jwtEpoch: 1` on registration is cheap; backfilling existing rows on every read would be wasteful. Treating undefined-as-1 in `epochOf` is a one-liner that handles legacy docs forever without a migration. A future Phase 4 may run a background backfill script for hygiene, but it's optional.
+2. **`requireAuth` now hits Mongo on every protected request** (to load the user for the epoch check). This is acceptable — `findById` is a single indexed read, ~1ms in dev. If it becomes a hotspot in Phase 4 we can add a short-TTL cache (Redis or in-memory LRU) keyed by userId.
+3. **Three-rejection-paths-one-code rationale**: signature verify failure / epoch mismatch / user-not-found all return INVALID_SESSION. An attacker probing a stolen cookie shouldn't get a hint about WHY their token is dead. The pino logs at debug level have the detail for developers.
+4. **`logout-all` is idempotent**: calling it twice in a row bumps the epoch twice. Both bumps still log everyone out — the user just ends up at epoch+2 instead of epoch+1. Harmless.
+
+#### TODO markers planted
+```ts
+// TODO:phase-1.6 expose a "Sign out everywhere" button in a settings UI
+// TODO:phase-4 add a short-TTL user cache to avoid the per-request Mongo lookup
+```
 
 ### 1.5e — Schema/contract cleanup
 - [ ] Extract shared request/response zod schemas into `backend/src/shared/contracts.ts` (import from both routes and services)

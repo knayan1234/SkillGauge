@@ -29,8 +29,23 @@ function toApiUser(doc: { _id: string; email: string; name: string }): User {
   return { id: doc._id, email: doc.email, name: doc.name };
 }
 
+// Phase 1.5d: helper that returns the user's current jwtEpoch, defaulting legacy docs
+// (registered before 1.5d landed) to 1. Centralized so a future migration that backfills
+// the field for all users only has to flip this in one place.
+function epochOf(doc: { jwtEpoch?: number }): number {
+  return doc.jwtEpoch ?? 1;
+}
+
+// What register/login return to the route layer. The route destructures `epoch` to feed
+// into `signSessionToken(userId, epoch)` — the `User` shape stays wire-facing (no epoch
+// leakage to the FE).
+export interface AuthResult {
+  user: User;
+  epoch: number;
+}
+
 export const authService = {
-  async register(email: string, password: string): Promise<User> {
+  async register(email: string, password: string): Promise<AuthResult> {
     const existing = await usersRepo.findByEmail(email);
     if (existing) {
       // Uniform error timing isn't enforced here — Phase 1 scope. A production auth layer
@@ -38,18 +53,21 @@ export const authService = {
       throw new AuthError("EMAIL_TAKEN", "Email already registered");
     }
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    // Phase 1.5d: every new user starts at epoch 1. The first time the epoch ever bumps
+    // (logout-all, password reset), tokens signed with epoch 1 become INVALID_SESSION.
     const doc = {
       _id: randomUUID(),
       email,
       passwordHash,
       name: email.split("@")[0],
       createdAt: new Date().toISOString(),
+      jwtEpoch: 1,
     };
     await usersRepo.create(doc);
-    return toApiUser(doc);
+    return { user: toApiUser(doc), epoch: epochOf(doc) };
   },
 
-  async login(email: string, password: string, ip = "unknown"): Promise<User> {
+  async login(email: string, password: string, ip = "unknown"): Promise<AuthResult> {
     // Phase 1.5c: pre-bcrypt lockout check. We hash by email (not by user ID) so even
     // unknown emails count toward a lockout — denying attackers an "exists vs not"
     // signal. The check runs BEFORE the bcrypt to keep CPU bounded under attack.
@@ -79,7 +97,7 @@ export const authService = {
     // clear is correct semantics: you proved you own the account, the streak is over.
     await loginAttemptsRepo.clear(emailHash);
 
-    return toApiUser(doc);
+    return { user: toApiUser(doc), epoch: epochOf(doc) };
   },
 
   // Internal helper. Public-facing methods call this on every failed login. The TTL on

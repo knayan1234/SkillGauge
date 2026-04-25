@@ -93,8 +93,9 @@ export const passwordResetService = {
     const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     await usersRepo.updatePasswordHash(doc.userId, passwordHash);
 
-    // TODO:phase-1.5d bump user.jwtEpoch here so any existing sessions are invalidated —
-    // a password reset MUST log out everywhere. Today (1.5b only) the old session token
-    // remains valid until it expires naturally.
+    // Phase 1.5d: a password reset MUST invalidate every existing session for this user.
+    // Bumping jwtEpoch makes every previously-signed token fail requireAuth's epoch check
+    // on the next request — instant global logout, no token tracking required.
+    await usersRepo.bumpJwtEpoch(doc.userId);
   },
 };

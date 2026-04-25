@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { env } from "@/config/env";
+import { usersRepo } from "@/db/repos/users";
 import {
   clearSessionCookie,
   requireAuth,
@@ -35,11 +36,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       });
     }
     try {
-      const user = await authService.register(
+      const { user, epoch } = await authService.register(
         parsed.data.email,
         parsed.data.password,
       );
-      setSessionCookie(reply, signSessionToken(user.id));
+      setSessionCookie(reply, signSessionToken(user.id, epoch));
       return reply.code(201).send({ user });
     } catch (err) {
       if (err instanceof AuthError && err.code === "EMAIL_TAKEN") {
@@ -73,12 +74,12 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       });
     }
     try {
-      const user = await authService.login(
+      const { user, epoch } = await authService.login(
         parsed.data.email,
         parsed.data.password,
         request.ip,
       );
-      setSessionCookie(reply, signSessionToken(user.id));
+      setSessionCookie(reply, signSessionToken(user.id, epoch));
       return reply.send({ user });
     } catch (err) {
       if (err instanceof AuthError) {
@@ -108,6 +109,26 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     clearSessionCookie(reply);
     return reply.code(204).send();
   });
+
+  // Phase 1.5d — log-out-everywhere. Bumps the user's `jwtEpoch`, which makes EVERY
+  // existing token signed for this user fail the requireAuth check on the next request
+  // (their `epoch` < new `jwtEpoch`). Then we clear the *current* request's cookie so
+  // the FE doesn't keep trying with a now-dead token.
+  //
+  // Requires auth — caller must already be holding a valid session to bump their own
+  // epoch. There's no "bump someone else's epoch" path; that would be admin-only and is
+  // not in scope before Phase 4.
+  //
+  // TODO:phase-1.6 expose a "Sign out everywhere" button in a settings UI that calls this.
+  app.post(
+    "/api/auth/logout-all",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      await usersRepo.bumpJwtEpoch(request.userId!);
+      clearSessionCookie(reply);
+      return reply.code(204).send();
+    },
+  );
 
   // --- Password reset (Phase 1.5b) ---------------------------------------------------
   // Two-step flow:

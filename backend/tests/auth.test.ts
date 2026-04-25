@@ -1,6 +1,9 @@
+import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import jwt from "jsonwebtoken";
 import { buildApp } from "../src/app";
+import { getDb } from "../src/db/connection";
+import type { PasswordResetTokenDoc } from "../src/db/repos/passwordResetTokens";
 import { COOKIE_NAME } from "../src/plugins/auth";
 import { resetDb, startMongo, stopMongo } from "./mongoHarness";
 
@@ -183,5 +186,134 @@ describe("auth routes", () => {
       code: "INVALID_FORMAT",
       message: "Invalid credentials format",
     });
+  });
+
+  // --- Phase 1.5d: session rotation via jwt_epoch ---
+
+  it("rejects a token signed with a stale epoch as INVALID_SESSION", async () => {
+    // Register, then forge a token with the SAME secret but epoch=0 (one less than the
+    // initial epoch=1). Verify the request is rejected on the epoch check, not on
+    // signature validity. This proves the new check is doing real work — without it,
+    // the epoch=0 token would pass since it's cryptographically valid.
+    const reg = await app.inject({
+      method: "POST",
+      url: "/api/auth/register",
+      payload: { email: "stale@example.com", password: "password123" },
+    });
+    const userId = reg.json().user.id;
+    const staleToken = jwt.sign(
+      { sub: userId, epoch: 0 },
+      process.env.JWT_SECRET!,
+      { expiresIn: "1h" },
+    );
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/me",
+      headers: { cookie: `${COOKIE_NAME}=${staleToken}` },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({
+      code: "INVALID_SESSION",
+      message: "Invalid session",
+    });
+  });
+
+  it("logout-all bumps epoch and invalidates the issuing cookie", async () => {
+    // Sign in, capture cookie. Hit /me successfully. Hit /logout-all with that cookie
+    // (passes auth — current epoch matches). Then re-hit /me with the SAME cookie:
+    // should now fail because the user's epoch has been bumped past the cookie's epoch.
+    const reg = await app.inject({
+      method: "POST",
+      url: "/api/auth/register",
+      payload: { email: "logoutall@example.com", password: "password123" },
+    });
+    const cookie = reg.headers["set-cookie"] as string;
+
+    const before = await app.inject({
+      method: "GET",
+      url: "/api/me",
+      headers: { cookie },
+    });
+    expect(before.statusCode).toBe(200);
+
+    const logoutAll = await app.inject({
+      method: "POST",
+      url: "/api/auth/logout-all",
+      headers: { cookie },
+    });
+    expect(logoutAll.statusCode).toBe(204);
+
+    const after = await app.inject({
+      method: "GET",
+      url: "/api/me",
+      headers: { cookie },
+    });
+    expect(after.statusCode).toBe(401);
+    expect(after.json().code).toBe("INVALID_SESSION");
+  });
+
+  it("logout-all without a cookie returns NOT_AUTHENTICATED (requires auth)", async () => {
+    // The route is preHandler-guarded — calling it without a cookie should hit the
+    // standard requireAuth rejection, not silently no-op. Bumping requires identity.
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/auth/logout-all",
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().code).toBe("NOT_AUTHENTICATED");
+  });
+
+  it("password reset confirm bumps the epoch so existing sessions are invalidated", async () => {
+    // This closes the known gap from Phase 1.5b: a phished reset link should not leave
+    // the original session active. After confirm, the previously-issued cookie must fail.
+    const reg = await app.inject({
+      method: "POST",
+      url: "/api/auth/register",
+      payload: { email: "resetbump@example.com", password: "password123" },
+    });
+    const userId = reg.json().user.id;
+    const cookie = reg.headers["set-cookie"] as string;
+
+    // Confirm the cookie works pre-reset.
+    const before = await app.inject({
+      method: "GET",
+      url: "/api/me",
+      headers: { cookie },
+    });
+    expect(before.statusCode).toBe(200);
+
+    // Insert a reset token directly (mirrors the test pattern from passwordReset.test.ts).
+    const plainToken = "b".repeat(64);
+    const tokenHash = createHash("sha256").update(plainToken).digest("hex");
+    const db = await getDb();
+    await db
+      .collection<PasswordResetTokenDoc>("password_reset_tokens")
+      .insertOne({
+        _id: `tok-${Math.random()}`,
+        userId,
+        tokenHash,
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        usedAt: null,
+        createdAt: new Date(),
+      });
+
+    // Consume the reset.
+    const confirm = await app.inject({
+      method: "POST",
+      url: "/api/auth/password/reset-confirm",
+      payload: { token: plainToken, newPassword: "newpassword456" },
+    });
+    expect(confirm.statusCode).toBe(200);
+
+    // The original cookie was issued with epoch=1; reset bumped to epoch=2. So now /me
+    // with the old cookie must be rejected.
+    const after = await app.inject({
+      method: "GET",
+      url: "/api/me",
+      headers: { cookie },
+    });
+    expect(after.statusCode).toBe(401);
+    expect(after.json().code).toBe("INVALID_SESSION");
   });
 });
