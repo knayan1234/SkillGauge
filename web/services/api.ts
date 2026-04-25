@@ -68,6 +68,9 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    // Phase 1.5a: machine-readable error code from `/api/auth/*` (e.g. "EMAIL_TAKEN",
+    // "INVALID_CREDENTIALS"). Optional because routes outside auth haven't been migrated.
+    public readonly code?: string,
   ) {
     super(message);
   }
@@ -86,10 +89,15 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (res.status === 204) return undefined as T;
   const body = (await res.json().catch(() => ({}))) as {
+    code?: string;
+    message?: string;
     error?: string;
   } & Record<string, unknown>;
   if (!res.ok) {
-    throw new ApiError(res.status, body.error ?? res.statusText);
+    // Prefer the new {code, message} shape; fall back to legacy {error} for routes that
+    // haven't been migrated yet (sessions/health). res.statusText is the final fallback.
+    const message = body.message ?? body.error ?? res.statusText;
+    throw new ApiError(res.status, message, body.code);
   }
   return body as T;
 }

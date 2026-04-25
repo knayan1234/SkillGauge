@@ -2,14 +2,15 @@
 
 Living document tracking every change made during the end-to-end build. Newest entries at the top within each phase.
 
-**Current phase:** Phase 1.1 — UX Enhancements **(COMPLETE ✓)** (dark mode, resume-per-session, extended setup inputs)
-**Next phase:** Phase 1.5 — Auth hardening (starts with JWT login polish)
-**Then:** Phase 2 — AI Intelligence, broken into sub-phases 2a → 2e
+**Current phase:** Phase 1.5a — JWT login polish **(COMPLETE ✓)** (env-driven TTL, structured `{code,message}` errors, login-failure auditing, expired-token test)
+**Next phase:** Phase 1.5b — Password reset flow
+**Then:** 1.5c rate-limit/lockout → 1.5d session rotation → 1.5e contract cleanup → **Phase 1.6 UI polish & visibility** → Phase 2 AI Intelligence (2a → 2e) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
 **Started:** 2026-04-18
 **Phase 0a finished:** 2026-04-18
 **Phase 0b finished:** 2026-04-19
 **Phase 1 finished:** 2026-04-19
 **Phase 1.1 finished:** 2026-04-20
+**Phase 1.5a finished:** 2026-04-25
 
 ---
 
@@ -374,17 +375,79 @@ Pre-Phase-2 polish based on user-driven UI feedback. All FE-only (plus stub + sc
 
 ---
 
-## Phase 1.5 — Auth Hardening (pending)
+## Phase 1.5 — Auth Hardening (1.5a ✓ — others pending)
 
 Bridges Phase 1 → Phase 2. Keeps all work local, no external keys. Small, mergeable chunks.
 
-### 1.5a — JWT login polish (**starts here**)
-- [ ] Verify cookie flags end-to-end in prod simulation (`secure`, `sameSite=lax`, `httpOnly`, `path=/`)
-- [ ] Normalize error shapes across `/api/auth/*` → `{ code, message }` so FE can branch without parsing strings
-- [ ] Add `POST /api/auth/login` failure logging (rate + email hash, never the password)
-- [ ] Extract `JWT_TTL_DAYS` to env (currently hardcoded 7d)
-- [ ] Add jest case: expired token → 401 on `/api/me`
-- **Why first:** confirms the Phase 1 auth surface is truly solid before building more on top of it.
+### 1.5a — JWT login polish ✓
+
+#### Goals
+- ✓ Verify cookie flags end-to-end in unit tests (`SameSite=Lax`, `HttpOnly`, `Path=/`); `Secure` is gated on `NODE_ENV=production` and verified by inspection (deploy-smoke deferred to Phase 4)
+- ✓ Normalize error shapes across `/api/auth/*` and `requireAuth` → `{ code, message }` so FE can branch without parsing strings
+- ✓ Add `POST /api/auth/login` failure logging (IP + hashed email + reason via Fastify pino; **never** the raw email or password)
+- ✓ Extract `JWT_TTL_DAYS` to env (was hardcoded 7d)
+- ✓ Add jest cases: expired token + tampered token → 401 `INVALID_SESSION` on `/api/me`
+
+#### Final verification (2026-04-25)
+
+| Command | Status |
+|---|---|
+| `cd backend && npx tsc --noEmit` | ✓ clean |
+| `cd backend && npm test` | ✓ 20/20 pass (was 13 — added 4 audit + 3 auth cases) |
+| `cd backend && npm run build` | ✓ `dist/` emitted |
+| `cd web && npx tsc --noEmit` | ✓ clean |
+| `cd web && npm test -- --ci` | ✓ 23/23 pass (no FE behavior change; `apiFetch` reshape is internal) |
+| `cd web && npm run build` | ✓ 4 static routes built |
+
+#### Error contract (now live)
+
+| Endpoint | Status | Body |
+|---|---|---|
+| `POST /api/auth/register` invalid format | 400 | `{code: "INVALID_FORMAT", message: "Invalid credentials format"}` |
+| `POST /api/auth/register` duplicate | 409 | `{code: "EMAIL_TAKEN", message: "Email already registered"}` |
+| `POST /api/auth/login` invalid format | 400 | `{code: "INVALID_FORMAT", message: "Invalid credentials format"}` |
+| `POST /api/auth/login` wrong creds | 401 | `{code: "INVALID_CREDENTIALS", message: "Invalid email or password"}` |
+| `requireAuth` no cookie | 401 | `{code: "NOT_AUTHENTICATED", message: "Not authenticated"}` |
+| `requireAuth` invalid/expired/tampered | 401 | `{code: "INVALID_SESSION", message: "Invalid session"}` |
+| `GET /api/me` user deleted | 401 | `{code: "USER_NOT_FOUND", message: "User no longer exists"}` |
+
+`message` strings are byte-identical to the prior `{error}` payloads — the FE display path in [AuthModal.tsx](web/features/auth/AuthModal.tsx) is unchanged. `code` is the new affordance for FE branching (consumed in 1.5b for the password-reset flow).
+
+#### Changelog
+
+- **2026-04-25** — Phase 1.5a complete. PROGRESS.md, ARCHITECTURE.md, IMPLEMENTATION_STATUS.md, requirements.md updated to reflect the new auth surface.
+- **2026-04-25** — Added [backend/src/shared/audit.ts](backend/src/shared/audit.ts) with `hashEmailForLog(email)` (SHA-256 over trimmed/lowercased input, first 16 hex chars). Login failures emit one Fastify pino warn line: `{event: "auth.login.failed", ip, emailHash, reason}` — IP for rate context, hashed email for per-actor correlation, reason from `AuthError.code`. Phase 1.5c will count these.
+- **2026-04-25** — All four `/api/auth/*` error returns + both `requireAuth` 401s switched to `{code, message}`. `AuthError.code` now propagates to the wire instead of being dropped. Sessions routes are out of explicit 1.5a scope and stay on the legacy `{error}` shape until 1.5e's contracts pass.
+- **2026-04-25** — `JWT_TTL_DAYS` added to [backend/src/config/env.ts](backend/src/config/env.ts) (`z.coerce.number().int().positive().default(7)`) and [backend/.env.example](backend/.env.example). [plugins/auth.ts](backend/src/plugins/auth.ts) now derives both the JWT `expiresIn` and the cookie `maxAge` from `env.JWT_TTL_DAYS` — single source of truth.
+- **2026-04-25** — FE [services/api.ts](web/services/api.ts) `ApiError` gained an optional `code` field. `apiFetch` now reads `body.code` and `body.message` with a fallback to `body.error` so non-migrated routes (sessions, health) continue to surface a usable message.
+- **2026-04-25** — Tests: new [backend/tests/audit.test.ts](backend/tests/audit.test.ts) (4 tests: deterministic, normalization, distinctness, hex-prefix shape). Extended [backend/tests/auth.test.ts](backend/tests/auth.test.ts) with expired-token + tampered-token + register-malformed cases; existing assertions tightened to check `code` + `message` and broader cookie flags (`SameSite=Lax`, `Path=/`, `HttpOnly`, no `Secure` in test env).
+- **2026-04-25** — Backend test count: 13 → 20.
+- **2026-04-25** — End-to-end verified against MongoDB Atlas M0 (live cluster, not just `mongodb-memory-server`). Cookie round-trip via curl: register → 201 + `Max-Age=604800; Path=/; HttpOnly; SameSite=Lax` cookie; `/api/me` with cookie → 200; without cookie → 401 `{code:"NOT_AUTHENTICATED"}`; bad creds → 401 `{code:"INVALID_CREDENTIALS"}`. Pino audit log emitted two `auth.login.failed` warn lines with hashed-email + IP + reason — no raw email or password in the log.
+- **2026-04-25** — `ARCHITECTURE.md` §9.1 added: full "how the session token is built and verified" walkthrough (JWT structure, sign/verify mechanics, cookie flag rationale, cross-origin handshake, rotation behavior). §13.1 added: end-to-end resume-ingestion flow (FE FileReader → sessionStorage → BE persist) + §13.2 the Phase 2c plan to plug `pdf-parse`/`mammoth` in behind the same wire contract.
+
+#### Files created
+- [backend/src/shared/audit.ts](backend/src/shared/audit.ts)
+- [backend/tests/audit.test.ts](backend/tests/audit.test.ts)
+
+#### Files modified
+- [backend/src/config/env.ts](backend/src/config/env.ts) — `JWT_TTL_DAYS` schema entry
+- [backend/.env.example](backend/.env.example) — `JWT_TTL_DAYS=7` row
+- [backend/src/plugins/auth.ts](backend/src/plugins/auth.ts) — env-driven TTL; `requireAuth` returns `{code, message}`
+- [backend/src/modules/auth/auth.routes.ts](backend/src/modules/auth/auth.routes.ts) — structured errors on all 4 paths; pino warn log on login failure
+- [backend/tests/auth.test.ts](backend/tests/auth.test.ts) — code/message assertions + expired-token + tampered-token + register-malformed
+- [web/services/api.ts](web/services/api.ts) — `ApiError.code` + apiFetch fallback chain
+- [PROGRESS.md](PROGRESS.md) — this section
+- [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) — current-phase header + auth row
+- [ARCHITECTURE.md](ARCHITECTURE.md) — error-contract subsection in §9
+- [requirements.md](requirements.md) — `JWT_TTL_DAYS` flipped to live
+
+#### Notable gotchas
+1. **Fastify pino is off in `NODE_ENV=test`** ([app.ts:14](backend/src/app.ts)) — that's intentional, keeps test output clean. The login-failure log line is verified by inspection in dev/prod, not asserted in unit tests. The `hashEmailForLog` helper itself is unit-tested in isolation.
+2. **`request.ip` behind a proxy** — Fastify only honors `X-Forwarded-For` when `trustProxy: true`. That's already on in production ([app.ts:16](backend/src/app.ts)), so logged IPs will be correct in Phase 4 deploy.
+3. **`secure` cookie flag in tests** — `env.NODE_ENV` is parsed once at module load. Unit tests run in `test`, so they assert `Secure` is absent. Verifying the prod path requires a deploy smoke (Phase 4) — calling out explicitly to avoid future "why isn't this asserted?" confusion.
+4. **`expiresIn: -1`** — jsonwebtoken accepts negative numbers (treated as seconds) and signs a token whose `exp` is already in the past. Cleaner than mocking `Date.now()` for the expired-token test.
+
+---
 
 ### 1.5b — Password reset flow
 - [ ] `POST /api/auth/password/reset-request` → opaque 200 (no user enumeration), stores single-use token hash + TTL in a new `password_reset_tokens` table
@@ -411,22 +474,70 @@ Bridges Phase 1 → Phase 2. Keeps all work local, no external keys. Small, merg
 
 ---
 
+## Phase 1.6 — UI Polish & Visibility (pending)
+
+User-facing polish that doesn't need a real LLM. Builds on Phase 1.5's solid auth surface. No new external dependency. All FE-only except the tiny `/api/health/info` add for the LLM badge.
+
+### Why this slots between 1.5 and 2
+
+These are visibility/UX items the user will demo to non-technical reviewers before there's a real LLM. They don't depend on Phase 2 (real provider) or Phase 3 (vector memory) so there's no reason to wait. Each item is a small, mergeable PR.
+
+### 1.6a — Auth-aware persistent header with logout
+- [ ] [web/components/AppLayout.tsx](web/components/AppLayout.tsx) + [web/features/interview/InterviewHeader.tsx](web/features/interview/InterviewHeader.tsx) — when `useAuth().isAuthenticated`, show a user menu (avatar/initial + email + Logout) on the right of the header; when not, show the existing "Sign in" CTA
+- [ ] Logout flow: call `useAuth().logout()` (already implemented) → `router.push("/")` → AuthModal closes, query cache clears
+- [ ] FE test: render header authed → click Logout → `mockLogout` called once → `isAuthenticated` flips false
+- **Why:** today the only way to log out is to clear cookies in devtools. Even the demo path can't show "different user signs in" without it.
+
+### 1.6b — Expanded homepage
+- [ ] [web/app/page.tsx](web/app/page.tsx) — add sections beyond the current single hero: "What SkillGauge does" (3-4 bullets), "How a session works" (3-step flow with screenshots/icons), "Why it's different" (long-term memory pitch)
+- [ ] Auth-state aware CTAs: "Start a session" if logged in (deeplink to `/setup`), "Sign in" if not
+- [ ] Keep static — no client components beyond the header. Lighthouse score must stay ≥ 95 on perf
+- **Why:** current homepage is barely more than a logo + login button. First impression for any reviewer should explain the product.
+
+### 1.6c — Active LLM provider badge
+- [ ] BE: `GET /api/health/info` (public) returns `{ llmProvider: "stub" | "openai" | "anthropic", llmModel: string | null }`. `llmModel` is `null` until 2a (where it becomes `OPENAI_MODEL`).
+- [ ] FE: small chip in [InterviewHeader.tsx](web/features/interview/InterviewHeader.tsx) — "🤖 stub" / "🤖 openai · gpt-4o-mini" / "🤖 anthropic · claude-sonnet-4-6" — react-query hits `/api/health/info` once on mount with `staleTime: Infinity`
+- [ ] Tooltip on hover: "AI provider currently in use. Phase 1 uses a deterministic stub; real models land in Phase 2."
+- **Why:** the demo currently looks like a real LLM is grading you. That's misleading. A visible "stub" badge sets the right expectation, and once 2a ships the badge shows the real model name without any FE code change.
+
+### 1.6d — Foundation for chatroom sidebar (UI only)
+- [ ] [InterviewSidebar.tsx](web/features/interview/InterviewSidebar.tsx) — restructure into a "chatroom list" layout: each entry shows resume filename (truncated) + relative date ("2h ago", "Yesterday", "Mar 12"). Today's active session is the only entry; placeholder rows show what archived sessions will look like
+- [ ] Read existing `localStorage[archived_sessions]` (Phase 1.1 archive guard) to populate the placeholder rows so the UI is real on hydrate
+- [ ] No new BE endpoint yet — Phase 3e wires `GET /api/sessions` so this UI consumes server data instead of localStorage
+- **Why:** users expect a ChatGPT/Discord-style sidebar. Building the UI now (against archived local snapshots) means Phase 3 only has to swap the data source, not rebuild the layout.
+
+### Final verification (when complete)
+
+| Command | Expected |
+|---|---|
+| `cd backend && npx tsc --noEmit && npm test` | typecheck clean; ≥ 21 BE tests (one new for `/api/health/info` shape) |
+| `cd web && npx tsc --noEmit && npm test -- --ci && npm run build` | typecheck clean; ≥ 25 FE tests (new tests for header logout + provider badge) |
+| Manual smoke | Logout button visible when authed; homepage loads with full content; LLM badge reads "stub"; sidebar shows current + archived rows |
+
+**Exit criteria:** all four sub-phases green; CI green; no new external dep; [ARCHITECTURE.md §11](ARCHITECTURE.md) (rendering + routing) updated to reflect new homepage sections; [ARCHITECTURE.md §10](ARCHITECTURE.md) (LLM abstraction) gains a "How the FE knows which provider is live" subsection.
+
+---
+
 ## Phase 2 — AI Intelligence w/ Provider-Agnostic LLMClient (pending, sub-parted)
 
 Each sub-phase is a self-contained PR. `stubClient` keeps working at every step so `main` is never broken.
 
-### 2a — OpenAI provider behind `LLMClient`
-- [ ] `backend/src/llm/openaiClient.ts` implementing `LLMClient`
-- [ ] Factory switch on `LLM_PROVIDER=openai`
+### 2a — OpenAI provider behind `LLMClient` (depends on 2b prompts existing)
+- [ ] `backend/src/llm/openaiClient.ts` implementing `LLMClient` — imports prompts from 2b
+- [ ] Factory switch on `LLM_PROVIDER=openai` (FE badge from Phase 1.6c flips automatically once env changes)
 - [ ] Env: `OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-4o-mini`)
 - [ ] Timeout + single retry on transient 5xx
 - [ ] Unit test with mocked `fetch` (no real calls in CI)
 - **External credentials needed:** OpenAI API key.
 
-### 2b — Prompt templates + versioning
-- [ ] `backend/src/llm/prompts/v1/{generateQuestion,gradeAnswer}.ts` — template + version tag
-- [ ] `prompt_version` column on `messages` — every question/feedback records which prompt produced it
-- [ ] Golden fixtures for deterministic-temperature grading checks
+### 2b — Prompt templates + versioning (**lands FIRST in Phase 2** — provider-agnostic)
+- [ ] `backend/src/llm/prompts/v1/generateQuestion.ts` — template returns `{ system, user }` strings given `QuestionContext` (resume text + JD + style + difficulty + role + focusAreas + prior Q&A summary). Provider-agnostic shape.
+- [ ] `backend/src/llm/prompts/v1/gradeAnswer.ts` — template for rubric-based grading: returns `{ system, user }` plus a JSON-schema-like response shape (score 0-100, strengths[], improvements[]) that any provider can `response_format` against.
+- [ ] `backend/src/llm/prompts/v1/index.ts` — exports `PROMPT_VERSION = "v1"` + helpers
+- [ ] `prompt_version` field added to `messages` collection — every question/feedback records which prompt produced it (so prompts can rev independently of model)
+- [ ] Golden fixtures for deterministic-temperature grading checks (`backend/tests/llm/prompts.fixtures.ts`)
+- [ ] `stubClient` updated to call the same `prompts/v1/*` templates (just for shape consistency — return value still canned). This way the prompts are exercised in CI even with `LLM_PROVIDER=stub`.
+- **Why this lands BEFORE 2a/2e:** the user wants prompts written ahead of any specific provider so swapping providers is a config change, not a rewrite. Prompts must be the source of truth; `openaiClient` and `anthropicClient` are thin adapters around them.
 
 ### 2c — Resume + JD parsing
 - [ ] PDF parser (`pdf-parse` or similar) + DOCX parser (`mammoth`) → plain text
@@ -449,15 +560,18 @@ Each sub-phase is a self-contained PR. `stubClient` keeps working at every step 
 
 ---
 
-## Phase 3 — Long-term Memory & Progress Dashboard (pending)
+## Phase 3 — Long-term Memory + Chatroom Sidebar + Dashboard (pending)
 
 Broken down when Phase 2 finishes. Preliminary sub-phase sketch:
 - 3a — Harden Mongo persistence (Atlas connection, replica-set config, connection-pool tuning)
 - 3b — Embeddings provider interface (`EmbeddingsClient`)
 - 3c — Vector store (Mongo Atlas Vector Search or Pinecone) + resume/answer indexing
 - 3d — Retrieval plumbed into question generation context
-- 3e — `GET /api/sessions` list + aggregation endpoints
-- 3f — FE `/dashboard` route with trends
+- 3e — `GET /api/sessions` list endpoint with filters (by `resumeFileName`, `createdAt` range, `status`); pagination via `?limit=20&before=<sessionId>`
+- 3f — **FE chatroom sidebar (real data)** — replaces Phase 1.6d's localStorage-archive UI with `useQuery` against `GET /api/sessions`. Sessions grouped by resume name, sorted by date desc. Click → `router.push("/interview?session=:id")`.
+- 3g — **`GET /api/sessions/:id/messages` for history view** — when a sidebar entry is clicked, the interview page hydrates from this endpoint instead of starting fresh. Read-only mode if `status === "completed"`; resume in-progress mode if `status === "active"`.
+- 3h — `/dashboard` route with progress trends — aggregate score over time, strengths/weaknesses bar charts, per-resume breakdown
+- 3i — Weakness summaries derived after each session and cached on the session doc
 
 ---
 

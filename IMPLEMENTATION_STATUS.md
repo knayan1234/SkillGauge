@@ -1,7 +1,7 @@
 # SkillGauge Implementation Status
 
-**Current phase:** Phase 1.1 — UX Enhancements **(COMPLETE ✓)**
-**Last updated:** 2026-04-20
+**Current phase:** Phase 1.5a — JWT login polish **(COMPLETE ✓)**
+**Last updated:** 2026-04-25
 
 ## Purpose
 
@@ -26,7 +26,8 @@ For the architectural reference see [ARCHITECTURE.md](ARCHITECTURE.md). For the 
 - Resume-change guard: starting a new interview while one is active prompts to archive the prior snapshot (localStorage) before overwriting the live session handoff blob.
 - The old `skillgauge/` RR7 prototype has been deleted (Phase 0b).
 - CI runs two parallel jobs (`web`, `backend`) — each install → typecheck → test → build.
-- 23 FE tests + 13 BE tests = 36 total, green.
+- 23 FE tests + 20 BE tests = 43 total, green (BE bumped from 13 to 20 in Phase 1.5a: 4 audit + 3 new auth cases).
+- Auth surface returns structured `{code, message}` errors across all `/api/auth/*` and `requireAuth` 401s as of Phase 1.5a; `JWT_TTL_DAYS` is env-driven; failed logins emit a pino audit line with hashed email + IP (never the raw email or password).
 
 ---
 
@@ -105,7 +106,7 @@ SkillGauge/
 | Env config | ✓ done | zod-validated, dev fallback for `JWT_SECRET`, fatal in prod |
 | HTTP server | ✓ done | `buildApp()` factory separate from `listen()` for `app.inject()` tests |
 | CORS + cookies | ✓ done | `@fastify/cors` with explicit origin + credentials; `@fastify/cookie` |
-| Auth (register/login/logout/me) | ✓ done | bcryptjs (10 rounds), JWT HS256 7-day, httpOnly cookie `skillgauge_session` |
+| Auth (register/login/logout/me) | ✓ done (1.5a) | bcryptjs (10 rounds), JWT HS256 with TTL from `JWT_TTL_DAYS` env (default 7), httpOnly cookie `skillgauge_session`. All error paths return `{code, message}`; failed logins emit a pino audit line `{event, ip, emailHash, reason}` |
 | `requireAuth` preHandler | ✓ done | Verifies cookie, loads user onto `request.user`; 401 on missing/tampered |
 | Session lifecycle | ✓ done (1.1) | Create session + first question atomically; `totalQuestions` driven by `request.questionCount`; idempotent question fetch; batched answer response |
 | Session init contract | ✓ done (1.1) | `initSessionSchema` now accepts `interviewStyle` + `difficulty` + `roleLevel` + `questionCount` + optional `focusAreas`; persisted on the session doc and threaded into `QuestionContext` via `ctxFromSession()` |
@@ -137,24 +138,35 @@ SkillGauge/
 
 ## What Still Needs to Be Built
 
-### Phase 2 — AI Intelligence (next)
+### Phase 1.6 — UI Polish & Visibility (next, NEW)
 
 | Area | Priority | What |
 |---|---|---|
-| Real LLM provider | High | Implement `openaiClient` and/or `anthropicClient` against the existing `LLMClient` interface |
-| Prompt management | High | Versioned prompts for question generation and rubric-based grading |
-| Resume + JD parsing | High | Extract text from PDF/DOC/DOCX server-side; chunk and normalize |
+| Logout button visible when authed | High | Persistent header user menu — no more "open devtools to clear cookie" |
+| Expanded homepage | High | Multi-section landing page (what / how / why); auth-state-aware CTAs |
+| Active LLM provider badge | High | `GET /api/health/info` exposes `{llmProvider, llmModel}`; FE chip shows "stub" / "openai · gpt-4o-mini" / etc. so the demo doesn't pretend a real model is grading |
+| Chatroom-style sidebar (UI only) | Medium | Sessions as chatrooms grouped by resume + date; backed by localStorage archive today, swappable to server data in 3f |
+
+### Phase 2 — AI Intelligence
+
+| Area | Priority | What |
+|---|---|---|
+| Prompt templates (lands FIRST in Phase 2) | High | Provider-agnostic `prompts/v1/{generateQuestion,gradeAnswer}.ts` written *before* any specific provider — so swapping providers is a config change, not a rewrite. `prompt_version` recorded on every message |
+| Real LLM provider | High | Implement `openaiClient` and/or `anthropicClient` as thin adapters around the prompts |
+| Resume + JD parsing | High | Extract text from PDF/DOC/DOCX server-side via `pdf-parse` + `mammoth`; chunk and normalize |
 | Rate limiting + cost guardrails | Medium | Per-user quotas; abort on abusive input length |
 | Prompt regression tests | Medium | Golden-answer fixtures; snapshot LLM output shape |
 
-### Phase 3 — Long-term Memory + Dashboard
+### Phase 3 — Long-term Memory + Chatroom Sidebar + Dashboard
 
 | Area | Priority | What |
 |---|---|---|
 | Vector DB | High | Mongo Atlas Vector Search / Pinecone — embed past answers + resume chunks for cross-session context |
 | Embeddings provider | High | OpenAI `text-embedding-3-small` or Voyage behind an interface analogous to `LLMClient` |
 | Managed Mongo | High | Move dev Mongo → managed Atlas; tune connection pool + replica-set config |
-| `GET /api/sessions` list | High | Populate sidebar history with real sessions |
+| `GET /api/sessions` list | High | Filterable by `resumeFileName` + `createdAt` range; pagination cursor; powers the chatroom sidebar |
+| Chatroom sidebar (real data) | High | Replaces Phase 1.6d's localStorage UI with server-backed list; sessions grouped by resume + date |
+| Chat history view | High | `GET /api/sessions/:id/messages` — clicking a chatroom entry hydrates the full transcript (read-only if completed, resumable if active) |
 | Progress dashboard | High | Aggregate scores, strengths, weaknesses across sessions — new `/dashboard` route |
 | Weakness summaries | Medium | Derived data cached and refreshed after each session |
 
@@ -224,20 +236,45 @@ SkillGauge/
 6. ✓ `STORAGE_KEYS` centralized (session/archived/active/jobDescription/options)
 7. ✓ Tests bumped to 23 FE + 13 BE = 36 green
 
+### Phase 1.5a (✓ complete, 2026-04-25)
+
+1. ✓ `JWT_TTL_DAYS` env-driven; cookie `Max-Age` matches JWT `exp`
+2. ✓ `{code, message}` errors across all `/api/auth/*` and `requireAuth` 401s
+3. ✓ Failed-login pino audit log with hashed email + IP + reason (never raw email/password)
+4. ✓ Expired-token + tampered-token + register-malformed Jest cases
+5. ✓ FE `ApiError.code` exposed for future code-based branching; `apiFetch` falls back to legacy `body.error`
+6. ✓ Tests: 23 FE + 20 BE = 43 green; verified end-to-end against MongoDB Atlas M0
+
+### Phase 1.5b–e (pending)
+
+1. Password reset flow (1.5b) — `password_reset_tokens` collection, `/api/auth/password/{reset-request,reset-confirm}`, dev-mode stdout sink for reset link
+2. Auth rate limit + lockout (1.5c) — counts the audit lines from 1.5a
+3. Session rotation via `jwt_epoch` (1.5d) — graceful global logout-everywhere
+4. Shared contracts cleanup (1.5e) — `backend/src/shared/contracts.ts`; sweep sessions/health to `{code, message}`
+
+### Phase 1.6 (pending — UI polish & visibility)
+
+1. Auth-aware persistent header with logout (1.6a)
+2. Expanded homepage with multi-section landing + auth-aware CTAs (1.6b)
+3. Active LLM provider badge — `GET /api/health/info` + FE chip (1.6c)
+4. Chatroom-style sidebar foundation backed by local archive (1.6d)
+
 ### Phase 2
 
-1. Implement `openaiClient` (or `anthropicClient`) against `LLMClient`
-2. Add resume/JD parsers (PDF / DOC / DOCX → text)
-3. Versioned prompt templates + rubric
-4. Rate limits + cost guardrails
-5. Prompt regression fixtures
+1. **Prompt templates first (2b) — lands ahead of any provider, provider-agnostic**
+2. Implement `openaiClient` (2a) as a thin adapter around the prompts
+3. Add resume/JD parsers (PDF / DOC / DOCX → text) (2c)
+4. Rate limits + cost guardrails (2d)
+5. Anthropic provider + regression fixtures (2e)
 
 ### Phase 3
 
 1. Harden Mongo persistence (managed Atlas, replica-set tuning, connection pool)
 2. Embeddings provider + vector DB (Atlas Vector Search or Pinecone)
-3. `GET /api/sessions` list endpoint + progress aggregation endpoints
-4. FE dashboard page + cross-session context surfaced in prompts
+3. `GET /api/sessions` list endpoint with resume/date filters + cursor pagination
+4. FE chatroom sidebar (real data) — replaces Phase 1.6d's local-archive view
+5. `GET /api/sessions/:id/messages` for full transcript hydration; click chatroom → resume or read-only history view
+6. `/dashboard` route + cross-session context surfaced in prompts
 
 ### Phase 4
 

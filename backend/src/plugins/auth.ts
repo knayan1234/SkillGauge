@@ -4,10 +4,6 @@ import { env } from "@/config/env";
 
 export const COOKIE_NAME = "skillgauge_session";
 
-// 7-day session — matches typical web app defaults. Short enough that a stolen cookie has a
-// bounded blast radius, long enough that active users rarely see a login prompt.
-const TOKEN_TTL = "7d";
-
 interface SessionPayload {
   sub: string; // user id
 }
@@ -21,7 +17,7 @@ declare module "fastify" {
 
 export function signSessionToken(userId: string): string {
   return jwt.sign({ sub: userId } satisfies SessionPayload, env.JWT_SECRET, {
-    expiresIn: TOKEN_TTL,
+    expiresIn: `${env.JWT_TTL_DAYS}d`,
   });
 }
 
@@ -35,7 +31,7 @@ export function setSessionCookie(reply: FastifyReply, token: string): void {
     sameSite: "lax",
     secure: env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: 60 * 60 * 24 * env.JWT_TTL_DAYS,
   });
 }
 
@@ -50,7 +46,9 @@ export async function requireAuth(
 ): Promise<void> {
   const token = request.cookies[COOKIE_NAME];
   if (!token) {
-    reply.code(401).send({ error: "Not authenticated" });
+    reply
+      .code(401)
+      .send({ code: "NOT_AUTHENTICATED", message: "Not authenticated" });
     return;
   }
   try {
@@ -59,7 +57,9 @@ export async function requireAuth(
   } catch {
     // Any verification failure (expired, tampered, wrong secret) → 401, never 500. We don't
     // leak which failure mode — an attacker doesn't need a hint.
-    reply.code(401).send({ error: "Invalid session" });
+    reply
+      .code(401)
+      .send({ code: "INVALID_SESSION", message: "Invalid session" });
   }
 }
 

@@ -24,8 +24,10 @@ SkillGauge is an AI-powered interview preparation platform. A user uploads a res
 - Parallel CI jobs for `web/` and `backend/` in a single workflow
 
 **What is planned:**
-- Real LLM provider behind `LLMClient` interface (OpenAI / Anthropic / Ollama) — Phase 2
-- Vector DB for long-term memory across sessions — Phase 3
+- Auth hardening sub-phases (password reset, rate limits, session rotation, contract cleanup) — Phase 1.5b–e
+- UI polish & visibility: persistent logout, expanded homepage, active LLM provider badge, chatroom-style sidebar — Phase 1.6
+- Provider-agnostic prompt templates land **first**, then real LLM providers (OpenAI / Anthropic) as thin adapters — Phase 2
+- Vector DB for long-term memory across sessions, real chatroom sidebar backed by `GET /api/sessions`, full transcript history view — Phase 3
 - Progress dashboard + analytics — Phase 3
 - E2E tests, observability, deploy, rate limits — Phase 4
 
@@ -342,8 +344,8 @@ Source: [backend/src/plugins/auth.ts](backend/src/plugins/auth.ts), [backend/src
 
 **On login/register:**
 1. BE verifies credentials (bcryptjs compare).
-2. BE signs JWT: `{ sub: userId }`, 7-day expiry, HS256.
-3. BE sets cookie `skillgauge_session`: `httpOnly`, `sameSite=lax`, `secure` in prod, `path=/`, 7-day `maxAge`.
+2. BE signs JWT: `{ sub: userId }`, HS256, expiry from `env.JWT_TTL_DAYS` (default 7).
+3. BE sets cookie `skillgauge_session`: `httpOnly`, `sameSite=lax`, `secure` in prod, `path=/`, `maxAge` matched to `JWT_TTL_DAYS`.
 4. FE never sees the token — browser just echoes the cookie on future same-origin (or `credentials: "include"` cross-origin) requests.
 
 **On every protected route:** `requireAuth` `preHandler` reads the cookie, verifies the JWT, loads the user, sets `request.user`. Missing/expired/tampered cookie → 401.
@@ -351,6 +353,76 @@ Source: [backend/src/plugins/auth.ts](backend/src/plugins/auth.ts), [backend/src
 **Logout:** `POST /api/auth/logout` clears the cookie. FE also calls `queryClient.clear()` to drop cached server state.
 
 **FE auth state:** `useAuth` owns one query — `queryKey: ["auth","current-user"]`, `queryFn: fetchMe` (returns `null` on 401). No more localStorage. `isAuthenticated` = `user !== null && !isLoading`.
+
+**Error contract (Phase 1.5a).** Every `/api/auth/*` failure and every `requireAuth` 401 returns a `{code, message}` JSON body. `code` is machine-readable; `message` is the human-readable string the FE can display directly. Codes in use today:
+
+| Code | Status | Where |
+|---|---|---|
+| `INVALID_FORMAT` | 400 | `register` / `login` zod parse failure |
+| `EMAIL_TAKEN` | 409 | `register` duplicate email |
+| `INVALID_CREDENTIALS` | 401 | `login` wrong email or password (intentionally not distinguished — no enumeration) |
+| `NOT_AUTHENTICATED` | 401 | `requireAuth` with no cookie |
+| `INVALID_SESSION` | 401 | `requireAuth` with expired / tampered / wrong-secret cookie |
+| `USER_NOT_FOUND` | 401 | `/api/me` when the JWT verifies but the user has been deleted |
+
+Sessions and health routes still emit the legacy `{error}` shape — Phase 1.5e's shared-contracts pass will sweep them. The FE [`apiFetch`](web/services/api.ts) reads `body.code` + `body.message` first and falls back to `body.error`, so both shapes coexist on the wire today.
+
+**Failed-login audit log (Phase 1.5a).** Every failed login (wrong creds OR malformed payload) emits a single Fastify pino warn line:
+```json
+{"event":"auth.login.failed","ip":"<remote>","emailHash":"<sha256-prefix>","reason":"<AuthError code>"}
+```
+The email hash uses `hashEmailForLog` ([backend/src/shared/audit.ts](backend/src/shared/audit.ts)) — SHA-256 over the trimmed/lowercased email, first 16 hex chars. Raw email and password are never logged. Phase 1.5c will count these per `(ip, emailHash)` to drive rate limiting and soft lockout.
+
+### 9.1 How the session token is built and verified
+
+The JWT is the *only* thing that proves identity on a request. The cookie is just transport. Mechanics, end to end:
+
+**(a) Anatomy of one of our tokens.** A signed JWT is three base64url-encoded segments joined by dots: `<header>.<payload>.<signature>`. For our tokens:
+
+```
+header   = base64url({"alg":"HS256","typ":"JWT"})
+payload  = base64url({"sub":"<userId-uuid>","iat":<unix-ts>,"exp":<unix-ts + JWT_TTL_DAYS*86400>})
+signature = HMAC-SHA256(<header>.<payload>, JWT_SECRET)
+```
+
+`sub` carries the user's UUID — that's all we need. `iat` (issued-at) and `exp` (expiry) are added by [`jsonwebtoken`](https://www.npmjs.com/package/jsonwebtoken) automatically when we pass `expiresIn`. The signature binds header + payload to our secret; flipping any byte in either segment makes the signature invalid. The full token is opaque to the FE — only the BE knows `JWT_SECRET`.
+
+**(b) Signing — happens on register and login** ([signSessionToken](backend/src/plugins/auth.ts)):
+```ts
+jwt.sign({ sub: userId }, env.JWT_SECRET, { expiresIn: `${env.JWT_TTL_DAYS}d` })
+```
+`expiresIn: "7d"` is parsed by `jsonwebtoken` to seconds and added to `iat` to compute `exp`. Single source of truth for TTL: `env.JWT_TTL_DAYS` (default 7) drives both this and the cookie's `Max-Age` (`60 * 60 * 24 * env.JWT_TTL_DAYS = 604800` seconds for 7 days). Change one env var, both update consistently.
+
+**(c) Cookie transport** ([setSessionCookie](backend/src/plugins/auth.ts)):
+```
+Set-Cookie: skillgauge_session=<jwt>; Max-Age=604800; Path=/; HttpOnly; SameSite=Lax[; Secure]
+```
+- **`HttpOnly`** — JS in the browser can't read `document.cookie` for this entry, so an XSS payload can't exfiltrate the token. (Phase 1's biggest win over the Phase 0 localStorage scheme.)
+- **`SameSite=Lax`** — the browser only attaches the cookie on top-level navigations and same-site requests. Cross-site `POST` from `evil.com` to `/api/auth/login` won't carry it → CSRF blocked for state-changing verbs. Top-level GET still works (e.g. clicking a magic link).
+- **`Path=/`** — every route under our origin gets the cookie. We don't scope tighter because `/api/me` and `/api/sessions/*` both need it.
+- **`Secure`** — only emitted in `NODE_ENV=production`. Localhost dev uses plain HTTP, so omitting `Secure` there is required for the cookie to be set at all. Prod must run on HTTPS or the cookie won't reach the BE.
+- **`Max-Age`** — browser-side expiry. Matches JWT's `exp` so the browser stops sending the cookie at the same moment the server stops accepting it.
+
+**(d) Verification — happens on every protected request** ([requireAuth](backend/src/plugins/auth.ts)):
+```ts
+const payload = jwt.verify(token, env.JWT_SECRET) as { sub: string }
+request.userId = payload.sub
+```
+`jwt.verify` does three checks atomically:
+1. Recomputes the signature with `JWT_SECRET` and compares — fails if anyone tampered with header/payload, or if the secret rotated.
+2. Checks `exp > now` — fails if expired.
+3. Parses the payload as JSON — fails on garbage.
+
+Any failure throws → caught → 401 `{code: "INVALID_SESSION"}`. We deliberately don't surface *which* check failed — an attacker doesn't need a hint about whether their forged token expired or was signed wrong.
+
+**(e) Cross-origin handshake.** FE on `:3000`, BE on `:4000` is cross-origin. Two settings make the cookie ride:
+- BE: `@fastify/cors` with `credentials: true` and an explicit `origin` (never `*` — the spec rejects it when credentials are on).
+- FE: every `fetch` call goes through `apiFetch` ([web/services/api.ts](web/services/api.ts)) with `credentials: "include"`.
+Without both, the browser silently drops the `Set-Cookie` (silently, no console error — debugging this is painful, hence the centralized `apiFetch`).
+
+**(f) What rotation looks like.** Bumping `JWT_SECRET` invalidates every existing token instantly (every signature now mismatches), so every user is logged out and their next request returns 401. Currently this means an unannounced downtime moment — Phase 1.5d will add `jwt_epoch` per user so we can rotate gracefully without booting everyone.
+
+**(g) What's *not* in the JWT.** No email, no roles, no permissions. Just `sub`. Every request that needs more than the user ID hits Mongo via `usersRepo.findById`. Trade-off: extra DB read per request, but tokens stay tiny + we never have to worry about stale claims (e.g. role changes take effect immediately, no need to wait for token expiry).
 
 ---
 
@@ -467,6 +539,69 @@ sequenceDiagram
   H->>IP: isComplete = true
   IP->>U: "Interview Complete" card
 ```
+
+### 13.1 How resume ingestion works today (Phase 1.1)
+
+This is the most-asked-about flow because the file types we *accept* (`PDF` / `DOC` / `DOCX`) don't match what we actually *do* with them today. Here's the truth, end-to-end.
+
+**(a) FE picks the file** ([SessionSetupForm.tsx](web/features/session-setup/SessionSetupForm.tsx) + [sessionSetupSchema.ts](web/features/session-setup/sessionSetupSchema.ts)):
+- The `<input type="file">` has `accept` set to `ACCEPTED_RESUME_ACCEPT_ATTR` — `.pdf, .doc, .docx, application/pdf, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document`. The browser filters the file picker.
+- zod re-validates after pick: `MIME ∈ ACCEPTED_RESUME_TYPES` AND `size ≤ 5 MB`. Anything else fails the form.
+
+**(b) FE extracts "text"** (same form, `readFileAsText` helper):
+```ts
+const reader = new FileReader();
+reader.readAsText(file);
+const resumeContent: string = await new Promise((res) => reader.onload = () => res(reader.result));
+```
+**This is the catch.** `FileReader.readAsText` decodes the file's bytes as UTF-8 *regardless of format*. For a `.txt` resume, you get clean text. For a `.docx` (which is a zip of XML), you get binary-looking gibberish. For a `.pdf` (postscript-like binary), same gibberish. We accept all three formats by extension but only `.txt`-shaped content is actually readable downstream.
+
+This is intentional Phase-1 scaffolding — the wire contract is correct (the BE receives a `resumeContent: string`), so when Phase 2c slots a real parser in, no upstream code changes.
+
+**(c) FE stashes for handoff** (sessionStorage, not the BE yet):
+```js
+sessionStorage.setItem(STORAGE_KEYS.session.id,
+  JSON.stringify({ resumeFileName, resumeContent }));
+sessionStorage.setItem(STORAGE_KEYS.session.jobDescription, jobDescription);
+sessionStorage.setItem(STORAGE_KEYS.session.options,
+  JSON.stringify({ interviewStyle, difficulty, roleLevel, questionCount, focusAreas }));
+sessionStorage.setItem(STORAGE_KEYS.session.active, "1");
+```
+sessionStorage (not localStorage) — survives a refresh of the same tab but dies when the tab closes. The four keys are namespaced via [`STORAGE_KEYS`](web/lib/storageKeys.ts) (Phase 1 audit fix #1 — no more magic strings).
+
+**(d) /interview page picks it up and posts to BE** ([web/app/interview/page.tsx](web/app/interview/page.tsx)):
+```ts
+const { resumeFileName, resumeContent } = JSON.parse(sessionStorage.getItem(STORAGE_KEYS.session.id)!);
+const jobDescription = sessionStorage.getItem(STORAGE_KEYS.session.jobDescription)!;
+const options = JSON.parse(sessionStorage.getItem(STORAGE_KEYS.session.options)!);
+await initializeSession({ resumeFileName, resumeContent, jobDescription, ...options });
+```
+This is the *only* path from setup → interview. No magic redirect with the file in flight; the file's text payload travels via sessionStorage between two route changes on the same origin.
+
+**(e) BE persists raw, doesn't parse** ([sessions.service.ts](backend/src/modules/sessions/sessions.service.ts) + [sessions repo](backend/src/db/repos/sessions.ts)):
+- The session document gets `resumeContent` stored verbatim as a Mongo string field.
+- `stubClient.generateQuestion(ctx)` does NOT use `resumeContent` today — questions come from canned banks indexed by `interviewStyle` + `difficulty` + `questionIndex`. The resume bytes are dead weight at the moment, parked in Mongo until Phase 2 onwards.
+
+**(f) Resume preview in sidebar** ([InterviewSidebar.tsx](web/features/interview/InterviewSidebar.tsx)):
+- Shows `resumeFileName` plus a "View" button that opens a Radix dialog with the raw `resumeContent` text. **For PDF/DOCX uploads, the dialog shows binary noise.** That's a Phase 1.1 known UX gap, deliberately not fixed here because Phase 2c rewrites this same code path with parsed text.
+
+**(g) Resume swap mid-session** ([SessionSetupForm.tsx](web/features/session-setup/SessionSetupForm.tsx)):
+- If `STORAGE_KEYS.session.active === "1"` when the form is submitted, a confirm dialog opens.
+- On confirm, the *prior* setup blob (`{resume, jobDescription, options}`) is pushed into a `localStorage[archived_sessions]` array before the new one overwrites sessionStorage. The actual session + messages on the BE are untouched — Phase 3's `GET /api/sessions` list endpoint will surface them properly. Until then the local archive is a safety net so mid-interview swaps don't silently lose context.
+
+### 13.2 Phase 2c plan (real resume parsing)
+
+The seam is clean — only one BE module needs to change.
+
+**Files that will be added/changed:**
+- New: `backend/src/modules/sessions/ingest.ts` — parser dispatch by MIME, returns plain text + metadata.
+- New: dependencies `pdf-parse` (PDF → text) and `mammoth` (DOCX → text). Both are pure-JS, no native build → Windows-safe.
+- Modified: [sessions.service.ts](backend/src/modules/sessions/sessions.service.ts) — `initialize()` calls `ingest.parseResume(resumeContent, mimeType)` before persisting; the persisted `resumeContent` becomes the *parsed* text, not raw bytes.
+- The FE wire contract doesn't change. The BE shifts from "trust whatever string the FE sent" to "validate-and-normalize before storing."
+
+**What changes for the user:** the sidebar's "View resume" dialog finally shows readable text for PDF/DOCX. The future real LLM gets clean prompt material, not binary noise.
+
+**What 2c deliberately doesn't do:** no object-storage of the original file (S3/R2) — that's Phase 4d. The original bytes are discarded after parsing. We only keep the extracted text.
 
 ---
 
@@ -631,19 +766,24 @@ cd web && npm install && npm run dev                            # :3000
 | 0b — Next.js migration | ✓ done | Ported RR7 → Next 16 App Router, Vitest → Jest, created this doc |
 | 1 — Real backend w/ stubbed AI | ✓ done | Fastify + MongoDB + cookie JWT + stubClient; FE on real HTTP |
 | 1.1 — UX enhancements | ✓ done | Dark mode, rich setup inputs (style/difficulty/role/count), resume-per-session guard, home-nav confirms |
-| **1.5 — Auth hardening** | **pending** | **Starts with JWT login polish. Sub-phases 1.5a → 1.5e** |
-| &nbsp;&nbsp;1.5a — JWT login polish | pending | Cookie flags, error shapes, `JWT_TTL_DAYS` env, expired-token test |
+| **1.5 — Auth hardening** (sub-parted) | partial | 1.5a ✓; 1.5b–e pending |
+| &nbsp;&nbsp;1.5a — JWT login polish | ✓ done (2026-04-25) | Cookie flags, error shapes, `JWT_TTL_DAYS` env, expired-token test, audit log |
 | &nbsp;&nbsp;1.5b — Password reset | pending | Opaque request + single-use token confirm + FE `/reset` |
-| &nbsp;&nbsp;1.5c — Auth rate limits + lockout | pending | Per-IP + per-email throttles |
+| &nbsp;&nbsp;1.5c — Auth rate limits + lockout | pending | Per-IP + per-email throttles (counts 1.5a's audit lines) |
 | &nbsp;&nbsp;1.5d — Session rotation | pending | `jwt_epoch` column; logout-everywhere |
 | &nbsp;&nbsp;1.5e — Contract cleanup | pending | Shared zod contracts, tighten service return types |
+| **1.6 — UI polish & visibility** (NEW) | pending | Logout in header, expanded homepage, LLM provider badge, chatroom sidebar foundation |
+| &nbsp;&nbsp;1.6a — Auth-aware persistent header w/ logout | pending | User menu when authed; "Sign in" otherwise |
+| &nbsp;&nbsp;1.6b — Expanded homepage | pending | Multi-section landing (what / how / why); auth-aware CTAs |
+| &nbsp;&nbsp;1.6c — Active LLM provider badge | pending | `GET /api/health/info` exposes `{llmProvider, llmModel}`; FE chip in interview header |
+| &nbsp;&nbsp;1.6d — Chatroom sidebar (UI only) | pending | Session list grouped by resume + date, backed by local archive until 3f |
 | **2 — AI intelligence** (sub-parted) | pending | Swap stubClient → real providers behind same `LLMClient` |
-| &nbsp;&nbsp;2a — OpenAI provider | pending | `openaiClient.ts`, timeout/retry, env-gated, mocked-fetch tests |
-| &nbsp;&nbsp;2b — Prompt templates + versioning | pending | `prompts/v1/`, `prompt_version` column |
-| &nbsp;&nbsp;2c — Resume + JD parsing | pending | PDF + DOCX → text, chunk + normalize |
+| &nbsp;&nbsp;**2b — Prompt templates + versioning** | pending | **Lands FIRST** in Phase 2 — provider-agnostic `prompts/v1/`, `prompt_version` recorded per message |
+| &nbsp;&nbsp;2a — OpenAI provider | pending | `openaiClient.ts` as a thin adapter around 2b's prompts; timeout/retry, env-gated, mocked-fetch tests |
+| &nbsp;&nbsp;2c — Resume + JD parsing | pending | PDF + DOCX → text via `pdf-parse` / `mammoth`; chunk + normalize |
 | &nbsp;&nbsp;2d — Cost + rate guards | pending | Per-user token quota; 402/429 codes |
 | &nbsp;&nbsp;2e — Anthropic provider + regression | pending | Second provider; shadow CI job; golden-prompt snapshots |
-| 3 — Long-term memory + dashboard | pending | Vector search (Atlas Vector Search or Pinecone), embedding pipeline, dashboard — sub-parted when 2 ships |
+| 3 — Long-term memory + chatroom sidebar + dashboard | pending | Vector search, real `GET /api/sessions` powering chatroom UI, full transcript hydration, `/dashboard` — sub-parted when 2 ships |
 | 4 — Production readiness | pending | E2E, observability, security headers, deploy — sub-parted when 3 ships |
 
 Full changelogs per phase: [PROGRESS.md](PROGRESS.md). What's done vs. what's left: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).

@@ -5,10 +5,6 @@ import { Providers } from "./providers";
 export const metadata: Metadata = {
   title: "SkillGauge",
   description: "AI-powered interview preparation platform",
-  icons: {
-    icon: "/SkillGauge-svg.svg",
-    apple: "/SkillGauge-svg.svg",
-  },
 };
 
 // themeColor must live on `viewport`, not `metadata` — Next 16 warns and ignores it otherwise.

@@ -2,7 +2,7 @@
 
 **Scope:** what you need to install, configure, and run to keep the **backend** (and FE talking to it) stand up locally and in CI. Keep this file in lockstep with [backend/.env.example](backend/.env.example) and [backend/package.json](backend/package.json).
 
-**Last updated:** 2026-04-20 (Phase 1.1)
+**Last updated:** 2026-04-25 (Phase 1.5a)
 
 ---
 
@@ -57,7 +57,7 @@ All validated by zod in [backend/src/config/env.ts](backend/src/config/env.ts). 
 | `LLM_PROVIDER` | **yes** | `stub` | `stub` today. `openai` / `anthropic` land in Phase 2 |
 | `OPENAI_API_KEY` | Phase 2a | — | unused until Phase 2a |
 | `ANTHROPIC_API_KEY` | Phase 2e | — | unused until Phase 2e |
-| `JWT_TTL_DAYS` | Phase 1.5a | `7` (hardcoded today) | will be env-driven in Phase 1.5a |
+| `JWT_TTL_DAYS` | no | `7` | live since Phase 1.5a — drives both JWT `expiresIn` and cookie `maxAge` |
 
 **Never commit `.env`.** `.gitignore` already excludes it; confirm before every push.
 
@@ -105,7 +105,7 @@ Smoke check:
 ## 6. Keeping it standing — operational checklist
 
 ### Before every commit
-- `cd backend && npx tsc --noEmit && npm test` — 13/13 green
+- `cd backend && npx tsc --noEmit && npm test` — 20/20 green
 - `cd web && npx tsc --noEmit && npm test -- --ci && npm run build` — 23/23 green
 - Do NOT commit `.env` or any file that dumps secrets
 
@@ -154,7 +154,7 @@ These are concrete, low-risk items you should do before touching Phase 1.5 featu
 5. **Wire `backend/.env.example` into the FE `web/README.md`** — currently the two READMEs don't cross-reference each other, and new contributors miss the `CORS_ORIGIN` ↔ `NEXT_PUBLIC_API_BASE_URL` pairing.
 6. **Add a `docker-compose.yml`** at the repo root with a single `mongo` service + named volume. Avoids the `docker run` incantation from §1 and makes teardown `docker compose down` instead of `docker rm`.
 7. **Write a one-page `RUNBOOK.md`** (when we move toward Phase 4 deploy) listing: how to tail logs, how to rotate JWT, how to restart, how to restore from backup, who to page. Stub it now so Phase 4 has a home for the content.
-8. **Start Phase 1.5a — JWT login polish** once 1–6 land. That's the next feature milestone per [PROGRESS.md](PROGRESS.md).
+8. **Start Phase 1.5b — Password reset flow** once 1–6 land. (1.5a — JWT login polish — finished 2026-04-25.) That's the next feature milestone per [PROGRESS.md](PROGRESS.md).
 
 ---
 
