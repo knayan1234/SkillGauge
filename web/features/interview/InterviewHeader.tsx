@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserMenu } from "@/components/UserMenu";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +53,9 @@ export function InterviewHeader({
         <div className="text-xs text-muted-foreground">
           Question {currentQuestion + 1} of {totalQuestions}
         </div>
+        {/* Phase 1.6a — auth-aware UserMenu also lives in the interview shell so Sign
+            out is reachable without leaving the interview view. */}
+        <UserMenu />
         <ThemeToggle />
         <Button
           variant="ghost"

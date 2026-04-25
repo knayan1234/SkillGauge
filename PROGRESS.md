@@ -2,9 +2,9 @@
 
 Living document tracking every change made during the end-to-end build. Newest entries at the top within each phase.
 
-**Current phase:** Phase 1.5e — Shared contracts + sessions error sweep **(COMPLETE ✓)** (single `backend/src/shared/contracts.ts`, sessions/health swept to `{code, message}`, three old `*.schema.ts` files deleted). **Phase 1.5 fully complete.**
-**Next phase:** Phase 1.6a — Auth-aware persistent header with logout
-**Then:** 1.6b expanded homepage → 1.6c LLM badge → 1.6d chatroom sidebar → Phase 2 AI Intelligence (2b prompts first → 2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
+**Current phase:** Phase 1.6a — Auth-aware persistent header **(COMPLETE ✓)** (global `AuthModalProvider` context, new `UserMenu` component, both AppLayout + InterviewHeader render it, landing page CTA is auth-aware)
+**Next phase:** Phase 1.6b — Expanded homepage with auth-aware CTAs
+**Then:** 1.6c LLM badge → 1.6d chatroom sidebar → Phase 2 AI Intelligence (2b prompts first → 2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
 **Started:** 2026-04-18
 **Phase 0a finished:** 2026-04-18
 **Phase 0b finished:** 2026-04-19
@@ -15,6 +15,7 @@ Living document tracking every change made during the end-to-end build. Newest e
 **Phase 1.5c finished:** 2026-04-25
 **Phase 1.5d finished:** 2026-04-25
 **Phase 1.5e finished:** 2026-04-25 (Phase 1.5 fully complete)
+**Phase 1.6a finished:** 2026-04-25
 
 ---
 
@@ -738,11 +739,63 @@ User-facing polish that doesn't need a real LLM. Builds on Phase 1.5's solid aut
 
 These are visibility/UX items the user will demo to non-technical reviewers before there's a real LLM. They don't depend on Phase 2 (real provider) or Phase 3 (vector memory) so there's no reason to wait. Each item is a small, mergeable PR.
 
-### 1.6a — Auth-aware persistent header with logout
-- [ ] [web/components/AppLayout.tsx](web/components/AppLayout.tsx) + [web/features/interview/InterviewHeader.tsx](web/features/interview/InterviewHeader.tsx) — when `useAuth().isAuthenticated`, show a user menu (avatar/initial + email + Logout) on the right of the header; when not, show the existing "Sign in" CTA
-- [ ] Logout flow: call `useAuth().logout()` (already implemented) → `router.push("/")` → AuthModal closes, query cache clears
-- [ ] FE test: render header authed → click Logout → `mockLogout` called once → `isAuthenticated` flips false
-- **Why:** today the only way to log out is to clear cookies in devtools. Even the demo path can't show "different user signs in" without it.
+### 1.6a — Auth-aware persistent header with logout ✓
+
+#### Goals
+- ✓ Global `AuthModalProvider` (new context) so any descendant can call `useAuthModal().open()` instead of prop-drilling state. Solves the "two AuthModal instances" problem that would have come from naively adding a header Sign-in button.
+- ✓ New [UserMenu](web/components/UserMenu.tsx) component renders three states: loading (empty — avoid flicker), authed (email + Sign out), anonymous (Sign in). Wired into both [AppLayout](web/components/AppLayout.tsx) AND [InterviewHeader](web/features/interview/InterviewHeader.tsx) so logout is reachable on every route, including mid-interview.
+- ✓ Sign-out flow: `useAuth().logout()` (existing) → `router.push("/")` so an authenticated route doesn't get stuck after logout.
+- ✓ Landing page CTA is now auth-aware: anonymous → opens AuthModal; authed → routes directly to `/setup` (skips redundant modal step).
+- ✓ 3 new FE tests pin the three render states + the two click outcomes.
+
+#### Final verification (2026-04-25)
+
+| Command | Status |
+|---|---|
+| `cd backend && npx tsc --noEmit && npm test` | ✓ 37/37 (unchanged — BE not touched in 1.6a) |
+| `cd web && npx tsc --noEmit` | ✓ clean |
+| `cd web && npm test -- --ci` | ✓ 26/26 (was 23 — +3 UserMenu cases) |
+| `cd web && npm run build` | ✓ 6 static routes |
+
+#### Changelog
+
+- **2026-04-25** — New [web/components/AuthModalProvider.tsx](web/components/AuthModalProvider.tsx) — React Context wrapper owning the modal `open` state. Single `<AuthModal>` instance lives inside the provider. `useAuthModal()` exposes `{open: () => void}` to descendants. Provider is wired into [providers.tsx](web/app/providers.tsx) inside `QueryClientProvider` (modal uses `useAuth` which uses `useQuery`) and `ThemeProvider` (so modal styles match active theme).
+- **2026-04-25** — New [web/components/UserMenu.tsx](web/components/UserMenu.tsx). Three states:
+  - `isLoading` → render `null` (no flicker between Sign in / Sign out as `/me` resolves)
+  - `isAuthenticated` → email (truncated, with `title=full-email` for accessibility) + Sign out button. Clicking calls `useAuth().logout()` → `router.push("/")`.
+  - anonymous → Sign in button. Clicking calls `useAuthModal().open()`.
+- **2026-04-25** — [AppLayout](web/components/AppLayout.tsx) header right-side now contains `<UserMenu />` + `<ThemeToggle />` in that order.
+- **2026-04-25** — [InterviewHeader](web/features/interview/InterviewHeader.tsx) right-side now contains `Question N of M` + `<UserMenu />` + `<ThemeToggle />` + Home button. Sign out from mid-interview is allowed (the home-confirm dialog is independent — separate concern, separate dialog).
+- **2026-04-25** — [Landing page](web/app/page.tsx) refactored:
+  - Removed local `useState(showAuth)` + `<AuthModal>` JSX (modal now lives globally).
+  - "Get started free" CTA branches on `useAuth().isAuthenticated` — authed users go straight to `/setup`, anonymous users open the AuthModal. CTA label flips to "Start a new session" when authed.
+  - Disabled the button while `isLoading` so users don't click before /me resolves and trigger the wrong branch.
+- **2026-04-25** — New [UserMenu.test.tsx](web/components/UserMenu.test.tsx) covers loading-state-renders-null, anonymous-click-opens-modal, authed-click-logs-out-and-routes-home. Mocks `useAuth`, `useAuthModal`, and `next/navigation` so the test isolates UI behavior.
+- **2026-04-25** — FE test count: 23 → 26.
+
+#### Files created
+- [web/components/AuthModalProvider.tsx](web/components/AuthModalProvider.tsx)
+- [web/components/UserMenu.tsx](web/components/UserMenu.tsx)
+- [web/components/UserMenu.test.tsx](web/components/UserMenu.test.tsx)
+
+#### Files modified
+- [web/app/providers.tsx](web/app/providers.tsx) — wraps children in `AuthModalProvider`
+- [web/components/AppLayout.tsx](web/components/AppLayout.tsx) — renders `<UserMenu />`
+- [web/features/interview/InterviewHeader.tsx](web/features/interview/InterviewHeader.tsx) — same
+- [web/app/page.tsx](web/app/page.tsx) — auth-aware CTA + drops local modal state
+
+#### Notable gotchas
+1. **Why a Context instead of prop-drilling**: `<AppLayout>` doesn't own the children that need to open the modal (the landing page renders the CTA, not the layout). Without context, every descendant route would have to receive an `onOpenAuth` prop, which doesn't survive React's `app/page.tsx` per-route boundaries cleanly.
+2. **Loading state renders `null`**: showing "Sign in" while `/me` is in flight, then immediately swapping to "Sign out" once it resolves, creates a visible flicker on every page load. Returning `null` until known state arrives is the simpler answer than skeletons.
+3. **`logout()` doesn't throw**: `useAuth.logout` swallows errors from `logoutUser` so the FE state always resets even on a transport error. UserMenu still wraps the call in try/finally to keep the spinner state consistent.
+4. **Auth modal vs home-confirm dialog in InterviewHeader**: two unrelated dialogs can coexist (Radix supports it). Sign out doesn't open the home-confirm — they're orthogonal.
+
+#### TODO markers planted
+```ts
+// TODO:phase-1.5d wire a "Sign out everywhere" entry once a Radix DropdownMenu is added
+// TODO:phase-1.6c add the LLM provider badge as a sibling component in the interview header
+// TODO:phase-1.6b expand homepage beyond hero (multi-section landing)
+```
 
 ### 1.6b — Expanded homepage
 - [ ] [web/app/page.tsx](web/app/page.tsx) — add sections beyond the current single hero: "What SkillGauge does" (3-4 bullets), "How a session works" (3-step flow with screenshots/icons), "Why it's different" (long-term memory pitch)

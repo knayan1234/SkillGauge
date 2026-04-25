@@ -110,7 +110,7 @@ Smoke check:
 
 ### Before every commit
 - `cd backend && npx tsc --noEmit && npm test` — 37/37 green
-- `cd web && npx tsc --noEmit && npm test -- --ci && npm run build` — 23/23 green
+- `cd web && npx tsc --noEmit && npm test -- --ci && npm run build` — 26/26 green
 - Do NOT commit `.env` or any file that dumps secrets
 
 ### If the backend won't start

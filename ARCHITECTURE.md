@@ -1051,7 +1051,7 @@ cd web && npm install && npm run dev                            # :3000
 | &nbsp;&nbsp;1.5d — Session rotation | ✓ done (2026-04-25) | Per-user `jwtEpoch` in JWT payload; `POST /api/auth/logout-all`; password reset bumps epoch |
 | &nbsp;&nbsp;1.5e — Contract cleanup | ✓ done (2026-04-25) | All schemas in `backend/src/shared/contracts.ts`; sessions routes swept to `{code, message}` with 4 new codes |
 | **1.6 — UI polish & visibility** (NEW) | pending | Logout in header, expanded homepage, LLM provider badge, chatroom sidebar foundation |
-| &nbsp;&nbsp;1.6a — Auth-aware persistent header w/ logout | pending | User menu when authed; "Sign in" otherwise |
+| &nbsp;&nbsp;1.6a — Auth-aware persistent header w/ logout | ✓ done (2026-04-25) | New `AuthModalProvider` context + `UserMenu` component in both AppLayout and InterviewHeader; landing page CTA auth-aware |
 | &nbsp;&nbsp;1.6b — Expanded homepage | pending | Multi-section landing (what / how / why); auth-aware CTAs |
 | &nbsp;&nbsp;1.6c — Active LLM provider badge | pending | `GET /api/health/info` exposes `{llmProvider, llmModel}`; FE chip in interview header |
 | &nbsp;&nbsp;1.6d — Chatroom sidebar (UI only) | pending | Session list grouped by resume + date, backed by local archive until 3f |

@@ -1,14 +1,38 @@
 "use client";
 
-import { useState } from "react";
+/**
+ * Landing page (`/`) — the marketing hero + auth-aware CTA.
+ *
+ * Phase 1.6a refactor: dropped the local `useState` + `<AuthModal>` host. The modal now
+ * lives in the global AuthModalProvider (see app/providers.tsx). The "Get started free"
+ * CTA branches on `isAuthenticated`:
+ *   - Anonymous → opens the global AuthModal via `useAuthModal().open()`
+ *   - Authenticated → routes to `/setup` directly (skip the redundant modal step)
+ *
+ * TODO:phase-1.6b expand this page beyond the single hero into a multi-section landing
+ * (what / how / why) per the user's "homepage detail" requirement.
+ */
+
+import { useRouter } from "next/navigation";
 import { Sparkles, Target, Zap, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppLayout } from "@/components/AppLayout";
-import { AuthModal } from "@/features/auth/AuthModal";
+import { useAuthModal } from "@/components/AuthModalProvider";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function LandingPage() {
-  const [showAuth, setShowAuth] = useState(false);
+  const { isAuthenticated, isLoading } = useAuth();
+  const { open: openAuthModal } = useAuthModal();
+  const router = useRouter();
+
+  const handleGetStarted = () => {
+    if (isAuthenticated) {
+      router.push("/setup");
+    } else {
+      openAuthModal();
+    }
+  };
 
   return (
     <AppLayout>
@@ -72,11 +96,13 @@ export default function LandingPage() {
 
             <Button
               type="button"
-              onClick={() => setShowAuth(true)}
+              onClick={handleGetStarted}
+              disabled={isLoading}
               size="lg"
               className="px-8 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
             >
-              Get started free
+              {/* Auth-aware label so a returning user sees the right next-step verb. */}
+              {isAuthenticated ? "Start a new session" : "Get started free"}
             </Button>
 
             <p className="text-xs text-muted-foreground/60 pt-4">
@@ -85,8 +111,6 @@ export default function LandingPage() {
           </div>
         </div>
       </div>
-
-      <AuthModal open={showAuth} onOpenChange={setShowAuth} />
     </AppLayout>
   );
 }

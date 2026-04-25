@@ -1,9 +1,23 @@
 "use client";
 
+/**
+ * AppLayout — the persistent shell on every non-interview route (`/`, `/setup`, `/reset`).
+ *
+ * Hosts:
+ *   - Brand mark (left): clickable, routes to `/`.
+ *   - UserMenu (right): Phase 1.6a — auth-aware Sign in / Sign out affordance backed by
+ *     the global AuthModalProvider so any route can trigger sign-in without prop drilling.
+ *   - ThemeToggle (right): light/dark/system via next-themes.
+ *
+ * The InterviewHeader (separate file) replicates the right-side cluster so the interview
+ * shell shows the same affordances. Both render `<UserMenu />` so behavior stays in sync.
+ */
+
 import { type ReactNode } from "react";
 import { Brain } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ThemeToggle } from "./ThemeToggle";
+import { UserMenu } from "./UserMenu";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -28,7 +42,10 @@ export function AppLayout({ children }: AppLayoutProps) {
               SkillGauge
             </span>
           </button>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <UserMenu />
+            <ThemeToggle />
+          </div>
         </div>
       </header>
       <main className="pt-14">{children}</main>
