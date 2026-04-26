@@ -2,10 +2,10 @@
 
 Living architecture reference. **Update this file in the same commit as any structural change** (new module, new route, new service, phase transition).
 
-**Current phase:** Phase 1.6 fully complete (all 4 sub-phases shipped 2026-04-25). Phase 1.5 (auth hardening) also complete. Next major milestone is Phase 2 (real LLM behind `LLMClient`); 2b prompts land first.
+**Current phase:** Phase 2b complete — provider-agnostic v1 prompt templates shipped. Phase 1.5 + 1.6 both fully complete. Next: Phase 2a/2e adapter classes in placeholder mode (no API key required to ship; key required to smoke-test).
 **Last updated:** 2026-04-25
-**Scope of this doc:** Full stack — FE (Next.js) in [web/](web/) and BE (Fastify + MongoDB) in [backend/](backend/). The AI layer is a deterministic stub behind the `LLMClient` interface; swapping to a real provider is Phase 2.
-**Test baseline:** 40 BE + 39 FE = 79 Jest tests, all green. CI runs both suites in parallel.
+**Scope of this doc:** Full stack — FE (Next.js) in [web/](web/) and BE (Fastify + MongoDB) in [backend/](backend/). The AI layer is a deterministic stub behind the `LLMClient` interface; provider-agnostic v1 prompts ship in `backend/src/llm/prompts/v1/`. Real OpenAI/Anthropic adapters slot in next without changing prompts or service code.
+**Test baseline:** 51 BE + 39 FE = 90 Jest tests, all green. CI runs both suites in parallel.
 
 ---
 
@@ -1057,7 +1057,7 @@ cd web && npm install && npm run dev                            # :3000
 | &nbsp;&nbsp;1.6c — Active LLM provider badge | pending | `GET /api/health/info` exposes `{llmProvider, llmModel}`; FE chip in interview header |
 | &nbsp;&nbsp;1.6d — Chatroom sidebar (UI only) | ✓ done (2026-04-25) | New `ChatroomEntry` + relative-time util; sidebar reads `localStorage[archived_sessions]`, swappable to server data in 3f without JSX changes |
 | **2 — AI intelligence** (sub-parted) | pending | Swap stubClient → real providers behind same `LLMClient` |
-| &nbsp;&nbsp;**2b — Prompt templates + versioning** | pending | **Lands FIRST** in Phase 2 — provider-agnostic `prompts/v1/`, `prompt_version` recorded per message |
+| &nbsp;&nbsp;**2b — Prompt templates + versioning** | ✓ done (2026-04-25) | Provider-agnostic `backend/src/llm/prompts/v1/`; `PROMPT_VERSION` constant; `messages.promptVersion` field; `gradeResponseSchema` zod for structured-output validation; stub exercises renderers in CI |
 | &nbsp;&nbsp;2a — OpenAI provider | pending | `openaiClient.ts` as a thin adapter around 2b's prompts; timeout/retry, env-gated, mocked-fetch tests |
 | &nbsp;&nbsp;2c — Resume + JD parsing | pending | PDF + DOCX → text via `pdf-parse` / `mammoth`; chunk + normalize |
 | &nbsp;&nbsp;2d — Cost + rate guards | pending | Per-user token quota; 402/429 codes |

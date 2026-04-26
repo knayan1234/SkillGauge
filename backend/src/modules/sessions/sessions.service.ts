@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { sessionsRepo, type SessionDoc } from "@/db/repos/sessions";
 import { messagesRepo, type MessageDoc } from "@/db/repos/messages";
 import { createLLMClient } from "@/llm/index";
+import { PROMPT_VERSION } from "@/llm/prompts/v1";
 import type { Session, Message, SessionInitRequest } from "@/shared/types";
 
 export class SessionError extends Error {
@@ -119,6 +120,7 @@ export const sessionsService = {
       type: "question",
       content: firstContent,
       questionIndex: 0,
+      promptVersion: PROMPT_VERSION,
       createdAt: new Date().toISOString(),
     };
     await messagesRepo.create(firstDoc);
@@ -158,6 +160,7 @@ export const sessionsService = {
       type: "question",
       content,
       questionIndex: index,
+      promptVersion: PROMPT_VERSION,
       createdAt: new Date().toISOString(),
     };
     await messagesRepo.create(doc);
@@ -218,6 +221,7 @@ export const sessionsService = {
       type: "feedback",
       content: graded.content,
       feedback: graded.feedback,
+      promptVersion: PROMPT_VERSION,
       // +1ms so list ordering by createdAt is stable even on fast loops.
       createdAt: new Date(now.getTime() + 1).toISOString(),
     };
@@ -243,6 +247,7 @@ export const sessionsService = {
         type: "question",
         content: nextContent,
         questionIndex: nextIndex,
+        promptVersion: PROMPT_VERSION,
         createdAt: new Date(now.getTime() + 2).toISOString(),
       };
       await messagesRepo.create(nextDoc);

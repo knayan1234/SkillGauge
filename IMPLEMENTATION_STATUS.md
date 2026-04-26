@@ -1,6 +1,6 @@
 # SkillGauge Implementation Status
 
-**Current phase:** Phase 1.6 — UI Polish & Visibility **(FULLY COMPLETE ✓ — all 4 sub-phases shipped)**
+**Current phase:** Phase 2b — Provider-agnostic prompt templates v1 **(COMPLETE ✓)** (Phase 1.5 + 1.6 fully complete; Phase 2 underway, 2b done, 2a/2e/2c/2d pending)
 **Last updated:** 2026-04-25
 
 ## Purpose
@@ -26,7 +26,7 @@ For the architectural reference see [ARCHITECTURE.md](ARCHITECTURE.md). For the 
 - Resume-change guard: starting a new interview while one is active prompts to archive the prior snapshot (localStorage) before overwriting the live session handoff blob.
 - The old `skillgauge/` RR7 prototype has been deleted (Phase 0b).
 - CI runs two parallel jobs (`web`, `backend`) — each install → typecheck → test → build.
-- 39 FE tests + 40 BE tests = 79 total, green. Across Phase 1.6: FE went 23 → 26 (1.6a UserMenu) → 29 (1.6c LlmBadge) → 39 (1.6d ChatroomEntry + relativeTime); BE went 37 → 40 (1.6c health/info contract).
+- 39 FE tests + 51 BE tests = 90 total, green. Across Phase 1.6: FE went 23 → 26 (1.6a UserMenu) → 29 (1.6c LlmBadge) → 39 (1.6d ChatroomEntry + relativeTime); BE went 37 → 40 (1.6c health/info contract). Phase 2b added 11 BE tests in `prompts.test.ts` taking BE from 40 → 51.
 - Auth surface (Phase 1.5a + 1.5b + 1.5c + 1.5d) supports register / login / logout / **logout-all** / `/me` / password reset request / password reset confirm. Defense-in-depth: per-IP rate limit + per-email soft lockout + structured `{code, message}` errors + **per-user JWT epoch rotation**.
 - Codes: `INVALID_FORMAT`, `EMAIL_TAKEN`, `INVALID_CREDENTIALS`, `NOT_AUTHENTICATED`, `INVALID_SESSION` (now also covers stale epoch + deleted-user paths), `USER_NOT_FOUND`, `INVALID_TOKEN`, `ACCOUNT_LOCKED`, `RATE_LIMIT_EXCEEDED`.
 - Env-driven knobs: `JWT_TTL_DAYS` (7), `RESET_TTL_MIN` (30), `AUTH_RATE_PER_MIN` (10), `LOGIN_LOCKOUT_THRESHOLD` (5), `LOGIN_LOCKOUT_WINDOW_MIN` (15).
@@ -155,10 +155,10 @@ SkillGauge/
 
 ### Phase 2 — AI Intelligence
 
-| Area | Priority | What |
+| Area | Status | What |
 |---|---|---|
-| Prompt templates (lands FIRST in Phase 2) | High | Provider-agnostic `prompts/v1/{generateQuestion,gradeAnswer}.ts` written *before* any specific provider — so swapping providers is a config change, not a rewrite. `prompt_version` recorded on every message |
-| Real LLM provider | High | Implement `openaiClient` and/or `anthropicClient` as thin adapters around the prompts |
+| Prompt templates (provider-agnostic) | ✓ done (2b) | `backend/src/llm/prompts/v1/` with `renderGenerateQuestion`, `renderGradeAnswer`, `gradeResponseSchema`, `PROMPT_VERSION` constant. Stub exercises them in CI; `messages.promptVersion` tags every question/feedback row. |
+| Real LLM provider | High | Implement `openaiClient` and/or `anthropicClient` as thin adapters around the v1 prompts. Placeholder mode commits the code without keys; smoke test requires a key. |
 | Resume + JD parsing | High | Extract text from PDF/DOC/DOCX server-side via `pdf-parse` + `mammoth`; chunk and normalize |
 | Rate limiting + cost guardrails | Medium | Per-user quotas; abort on abusive input length |
 | Prompt regression tests | Medium | Golden-answer fixtures; snapshot LLM output shape |

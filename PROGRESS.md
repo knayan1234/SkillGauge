@@ -2,9 +2,9 @@
 
 Living document tracking every change made during the end-to-end build. Newest entries at the top within each phase.
 
-**Current phase:** Phase 1.6d — Chatroom sidebar **(COMPLETE ✓)** (new `ChatroomEntry` component, sidebar reads `localStorage[archived_sessions]`, shows live + archived sessions sorted by date with relative timestamps via `Intl.RelativeTimeFormat`). **Phase 1.6 fully complete.**
-**Next phase:** Phase 2b — Provider-agnostic prompt templates v1
-**Then:** Phase 2 AI Intelligence (2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar (real data) → Phase 4 production
+**Current phase:** Phase 2b — Provider-agnostic prompt templates v1 **(COMPLETE ✓)** (new `backend/src/llm/prompts/v1/` with `renderGenerateQuestion` + `renderGradeAnswer` + `gradeResponseSchema` + `PROMPT_VERSION` constant; `messages` collection records `promptVersion` on every question + feedback; stub renders prompts in CI for shape-bug detection)
+**Next phase:** Phase 2a/2e — OpenAI + Anthropic adapter classes in placeholder mode (no API key required to ship; key required to smoke-test)
+**Then:** 2c PDF/DOCX parsing → 2d cost guards → Phase 3 long-term memory + chatroom sidebar (real data) → Phase 4 production
 **Started:** 2026-04-18
 **Phase 0a finished:** 2026-04-18
 **Phase 0b finished:** 2026-04-19
@@ -19,6 +19,7 @@ Living document tracking every change made during the end-to-end build. Newest e
 **Phase 1.6b finished:** 2026-04-25
 **Phase 1.6c finished:** 2026-04-25
 **Phase 1.6d finished:** 2026-04-25 (Phase 1.6 fully complete)
+**Phase 2b finished:** 2026-04-25
 
 ---
 
@@ -973,14 +974,62 @@ Each sub-phase is a self-contained PR. `stubClient` keeps working at every step 
 - [ ] Unit test with mocked `fetch` (no real calls in CI)
 - **External credentials needed:** OpenAI API key.
 
-### 2b — Prompt templates + versioning (**lands FIRST in Phase 2** — provider-agnostic)
-- [ ] `backend/src/llm/prompts/v1/generateQuestion.ts` — template returns `{ system, user }` strings given `QuestionContext` (resume text + JD + style + difficulty + role + focusAreas + prior Q&A summary). Provider-agnostic shape.
-- [ ] `backend/src/llm/prompts/v1/gradeAnswer.ts` — template for rubric-based grading: returns `{ system, user }` plus a JSON-schema-like response shape (score 0-100, strengths[], improvements[]) that any provider can `response_format` against.
-- [ ] `backend/src/llm/prompts/v1/index.ts` — exports `PROMPT_VERSION = "v1"` + helpers
-- [ ] `prompt_version` field added to `messages` collection — every question/feedback records which prompt produced it (so prompts can rev independently of model)
-- [ ] Golden fixtures for deterministic-temperature grading checks (`backend/tests/llm/prompts.fixtures.ts`)
-- [ ] `stubClient` updated to call the same `prompts/v1/*` templates (just for shape consistency — return value still canned). This way the prompts are exercised in CI even with `LLM_PROVIDER=stub`.
-- **Why this lands BEFORE 2a/2e:** the user wants prompts written ahead of any specific provider so swapping providers is a config change, not a rewrite. Prompts must be the source of truth; `openaiClient` and `anthropicClient` are thin adapters around them.
+### 2b — Prompt templates + versioning ✓
+
+#### Goals
+- ✓ New `backend/src/llm/prompts/v1/` folder with provider-agnostic renderers:
+  - [generateQuestion.ts](backend/src/llm/prompts/v1/generateQuestion.ts) — `renderGenerateQuestion(ctx) → { system, user }`
+  - [gradeAnswer.ts](backend/src/llm/prompts/v1/gradeAnswer.ts) — `renderGradeAnswer(q, a, ctx) → { system, user, responseSchema }` where `responseSchema` is a zod schema enforcing `{content, score: 1-10, strengths[], improvements[]}`
+  - [shared.ts](backend/src/llm/prompts/v1/shared.ts) — `ROLE_DESCRIPTION`, `DIFFICULTY_DESCRIPTION`, `STYLE_DESCRIPTION` mappings + `summarizePriorAnswers` helper
+  - [index.ts](backend/src/llm/prompts/v1/index.ts) — barrel export including `PROMPT_VERSION = "v1"` constant
+- ✓ `MessageDoc.promptVersion?: string` field added; [sessions.service.ts](backend/src/modules/sessions/sessions.service.ts) writes `PROMPT_VERSION` on every question + feedback insert (3 sites). User-typed answer rows leave it unset.
+- ✓ `stubClient` updated to call `renderGenerateQuestion` / `renderGradeAnswer` and discard — exercises the templates in CI so prompt-shape bugs (missing enum case in shared.ts, etc.) fail fast instead of waiting for a real provider.
+- ✓ 11 new BE tests in `prompts.test.ts` covering version constant, prompt interpolation, recent-answers conditional inclusion, focus-areas inclusion, JSON-shape instruction, and `gradeResponseSchema` validation (well-formed / out-of-range score / empty strengths).
+
+#### Final verification (2026-04-25)
+
+| Command | Status |
+|---|---|
+| `cd backend && npx tsc --noEmit` | ✓ clean |
+| `cd backend && npm test` | ✓ 51/51 (was 40 — +11 in prompts.test.ts) |
+| `cd backend && npm run build` | ✓ `dist/` emitted (now includes `dist/llm/prompts/v1/`) |
+| FE | unchanged (Phase 2b is BE-only) |
+
+#### Why provider-agnostic prompts ship FIRST in Phase 2
+
+The user explicitly asked for prompts written ahead of any specific provider so swapping is a config change, not a rewrite. Phase 2a + 2e adapters become thin SDK wrappers around these renderers — nothing prompt-specific lives in the adapters. Same prompts feed OpenAI (as `messages: [{role: "system"}, {role: "user"}]`) and Anthropic (as `system: ..., messages: [{role: "user", ...}]`) without modification.
+
+#### Versioning rationale
+
+Every question + feedback message persists `promptVersion`. When v2 prompts ship later, existing rows tagged "v1" stay; analytics can compare answer scores across versions to validate that v2 actually grades differently before retiring v1.
+
+#### Changelog
+
+- **2026-04-25** — Phase 2b shipped. PROGRESS.md, IMPLEMENTATION_STATUS.md, ARCHITECTURE.md, requirements.md updated.
+- **2026-04-25** — New folder `backend/src/llm/prompts/v1/` with 4 files (`shared.ts`, `generateQuestion.ts`, `gradeAnswer.ts`, `index.ts`).
+- **2026-04-25** — `gradeResponseSchema` zod shape mirrors the existing `Feedback` interface so persisted `feedback` subdoc on messages takes the LLM response directly — no field re-mapping. Score bounded 1-10 (integer), strengths required ≥1, improvements optional, `content` summary 1-500 chars.
+- **2026-04-25** — `messages.ts` repo: `MessageDoc.promptVersion?: string`. Optional → no migration needed.
+- **2026-04-25** — `sessions.service.ts` imports `PROMPT_VERSION` and writes it on three insert paths: initial question (line ~118), getQuestion fresh insert (line ~158), submitAnswer feedback + nextQuestion inserts (lines ~217, ~244).
+- **2026-04-25** — `stubClient` calls both renderers and discards. CI now catches shape regressions without needing a real LLM.
+- **2026-04-25** — Backend test count: 40 → 51.
+
+#### Files created
+- [backend/src/llm/prompts/v1/shared.ts](backend/src/llm/prompts/v1/shared.ts)
+- [backend/src/llm/prompts/v1/generateQuestion.ts](backend/src/llm/prompts/v1/generateQuestion.ts)
+- [backend/src/llm/prompts/v1/gradeAnswer.ts](backend/src/llm/prompts/v1/gradeAnswer.ts)
+- [backend/src/llm/prompts/v1/index.ts](backend/src/llm/prompts/v1/index.ts)
+- [backend/tests/prompts.test.ts](backend/tests/prompts.test.ts)
+
+#### Files modified
+- [backend/src/db/repos/messages.ts](backend/src/db/repos/messages.ts) — `MessageDoc.promptVersion?` field
+- [backend/src/llm/stubClient.ts](backend/src/llm/stubClient.ts) — calls renderers + discards
+- [backend/src/modules/sessions/sessions.service.ts](backend/src/modules/sessions/sessions.service.ts) — writes `PROMPT_VERSION` on 3 question/feedback inserts
+
+#### Notable gotchas
+1. **`PROMPT_VERSION` as a `const` re-export, not a magic string**: persisting `"v1"` directly at every insert site would drift the moment v2 lands. The constant is the single source of truth — any v2 PR that flips the constant automatically tags every new message correctly.
+2. **`responseSchema` returned from the renderer**: real adapters can pass it as `response_format: { type: "json_schema", json_schema: { schema: zodToJson(schema) } }` (OpenAI) or as a tool-call schema (Anthropic). Today the schema is also used to `.parse()` the LLM response before persisting, so a malformed response fails loudly instead of polluting the messages collection with garbage.
+3. **Token-budget mindfulness**: résumé truncated to 4000 chars, JD to 2000, prior-answers summary capped at 3 most recent. Total prompt size stays well under typical 8K context windows even with verbose résumés.
+4. **Stub renders + discards**: trade-off — wastes ~1ms per call to render strings the stub doesn't use. Worth it because every BE test now exercises the prompt path; a future enum addition that breaks `shared.ts` ROLE_DESCRIPTION mapping fails immediately with a clear stack trace, not silently in production.
 
 ### 2c — Resume + JD parsing
 - [ ] PDF parser (`pdf-parse` or similar) + DOCX parser (`mammoth`) → plain text

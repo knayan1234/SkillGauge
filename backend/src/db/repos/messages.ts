@@ -11,6 +11,10 @@ export interface MessageDoc {
   feedback?: Feedback;
   // Present only on question messages — powers the idempotency index.
   questionIndex?: number;
+  // Which prompt-template version produced this message. Set on question + feedback
+  // rows by the LLM-calling code path; absent on user-typed answer rows. Lets analytics
+  // compare answer scores across prompt revisions when v2 ships.
+  promptVersion?: string;
   createdAt: string;
 }
 

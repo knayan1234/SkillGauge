@@ -3,10 +3,19 @@ import type {
   LLMClient,
   QuestionContext,
 } from "./LLMClient";
+import {
+  renderGenerateQuestion,
+  renderGradeAnswer,
+} from "./prompts/v1";
 
 // Default deterministic stub provider. Canned questions grouped by interview style +
 // difficulty. The stub is intentionally deterministic so the FE can trust the branching
 // before a real provider gets swapped in against this same interface.
+//
+// We also render the v1 prompts on every call (and discard the rendered strings) so
+// that prompt-template bugs surface in CI instead of waiting for a real provider to
+// hit them. If `renderGenerateQuestion(ctx)` throws — say a future enum value isn't
+// covered in shared.ts — every BE test fails immediately with a clear stack trace.
 
 const BEHAVIORAL_QUESTIONS = [
   "Tell me about yourself and your background.",
@@ -87,6 +96,10 @@ const ROLE_SUFFIX: Record<QuestionContext["roleLevel"], string> = {
 
 export const stubClient: LLMClient = {
   async generateQuestion(ctx: QuestionContext): Promise<string> {
+    // Render the v1 prompt and discard — exercises the template path so bugs are
+    // caught in CI even though the stub doesn't ship the prompt to a real provider.
+    renderGenerateQuestion(ctx);
+
     const bank = pickQuestionBank(ctx);
     const base = bank[ctx.questionIndex % bank.length];
     const needsRoleFlavor = ctx.interviewStyle !== "behavioral";
@@ -94,10 +107,15 @@ export const stubClient: LLMClient = {
   },
 
   async gradeAnswer(
-    _question: string,
+    question: string,
     answer: string,
     ctx: QuestionContext,
   ): Promise<GradedAnswer> {
+    // Render the v1 prompt and discard — exercises the template path so bugs are
+    // caught in CI. Real providers also use the responseSchema returned by the
+    // renderer to enforce JSON shape on the LLM response.
+    renderGradeAnswer(question, answer, ctx);
+
     // Length proxy, scaled by difficulty so "hard" expects longer answers.
     const divisor = ctx.difficulty === "easy" ? 10 : ctx.difficulty === "hard" ? 25 : 15;
     const score = Math.min(10, Math.max(6, Math.floor(answer.length / divisor)));

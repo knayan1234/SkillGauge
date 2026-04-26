@@ -2,7 +2,7 @@
 
 **Scope:** what you need to install, configure, and run to keep the **backend** (and FE talking to it) stand up locally and in CI. Keep this file in lockstep with [backend/.env.example](backend/.env.example) and [backend/package.json](backend/package.json).
 
-**Last updated:** 2026-04-25 (Phase 1.6 fully complete; next is Phase 2b prompts)
+**Last updated:** 2026-04-25 (Phase 2b complete — provider-agnostic prompts shipped; next is Phase 2a/2e adapters in placeholder mode)
 
 ---
 
@@ -109,7 +109,7 @@ Smoke check:
 ## 6. Keeping it standing — operational checklist
 
 ### Before every commit
-- `cd backend && npx tsc --noEmit && npm test` — 37/37 green
+- `cd backend && npx tsc --noEmit && npm test` — 51/51 green
 - `cd web && npx tsc --noEmit && npm test -- --ci && npm run build` — 39/39 green
 - Do NOT commit `.env` or any file that dumps secrets
 
@@ -158,7 +158,7 @@ These are concrete, low-risk items you should do before touching Phase 1.5 featu
 5. **Wire `backend/.env.example` into the FE `web/README.md`** — currently the two READMEs don't cross-reference each other, and new contributors miss the `CORS_ORIGIN` ↔ `NEXT_PUBLIC_API_BASE_URL` pairing.
 6. **Add a `docker-compose.yml`** at the repo root with a single `mongo` service + named volume. Avoids the `docker run` incantation from §1 and makes teardown `docker compose down` instead of `docker rm`.
 7. **Write a one-page `RUNBOOK.md`** (when we move toward Phase 4 deploy) listing: how to tail logs, how to rotate JWT, how to restart, how to restore from backup, who to page. Stub it now so Phase 4 has a home for the content.
-8. **Start Phase 2b — Provider-agnostic prompt templates v1** once 1–6 land. (Phase 1.5 + Phase 1.6 both fully complete on 2026-04-25.) Next feature milestone per [PROGRESS.md](PROGRESS.md).
+8. **Start Phase 2a/2e — OpenAI + Anthropic adapter classes (placeholder mode)** once 1–6 land. (Phase 1.5 + Phase 1.6 + Phase 2b all complete on 2026-04-25.) Adapters ship without keys; smoke testing requires either an OpenAI or Anthropic API key — see §10 below for sign-up instructions.
 
 ---
 
