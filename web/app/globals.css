@@ -3,26 +3,47 @@
 /* next-themes toggles `class="dark"` on <html>; CSS vars swap at that boundary. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* === Theme tokens =========================================================
+ * `@theme` registers the values for Tailwind v4's utility generator (so `bg-foreground`,
+ * `text-primary`, etc. work). The mirrored `:root` block immediately below guarantees the
+ * same values are exposed as cascading CSS custom properties — Tailwind v4's @theme alone
+ * isn't reliable as a `var()` source from custom CSS rules in production builds, which
+ * silently breaks `body { color: var(--color-foreground) }` in dark mode. Belt + braces.
+ * ========================================================================= */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "SFMono-Regular", "Menlo", "Consolas",
+    monospace;
 
-  --color-background: #fafafa;
-  --color-foreground: #1f2937;
-  --color-card: #ffffff;
-  --color-card-foreground: #1f2937;
-  --color-primary: #8b5cf6;
+  /* "Amber + Slate Blue + Light Beige" palette — educational / creative-portfolio vibe.
+   * Beige (`#faf3e0`) replaces stark off-white as the page surface — warm, easy on the
+   * eye, pairs naturally with the amber brand accent. Primary is slate blue (`#4a6fa5`),
+   * less saturated than the previous `#2563eb` so links + focus rings sit calmer next
+   * to amber CTAs. Amber lives in `--color-amber` and tones down in dark mode below. */
+  --color-background: #fdf9eb;
+  --color-foreground: #27272a;
+  /* Card surface — barely-warm off-white instead of pure `#ffffff`. Pure white
+   * cards on a cream body read as cold alien blocks; this tone (very faint cream)
+   * harmonises with the warm background while still being clearly the lightest
+   * surface in the palette. */
+  --color-card: #fefcf3;
+  --color-card-foreground: #27272a;
+  --color-primary: #27272a;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #f3f4f6;
-  --color-secondary-foreground: #1f2937;
-  --color-muted: #f9fafb;
-  --color-muted-foreground: #6b7280;
-  --color-accent: #a78bfa;
+  --color-secondary: #f9f5e8;
+  --color-secondary-foreground: #27272a;
+  --color-muted: #faf6ea;
+  --color-muted-foreground: #4a4a4a;
+  --color-accent: #52525b;
   --color-accent-foreground: #ffffff;
+  --color-accent-2: #5a6c7d;
+  --color-amber: #f59e0b;
   --color-destructive: #ef4444;
   --color-destructive-foreground: #ffffff;
-  --color-border: #e5e7eb;
-  --color-input: #ffffff;
-  --color-ring: #8b5cf6;
+  --color-border: #ede5cf;
+  --color-input: #fefcf3;
+  --color-ring: #27272a;
   --color-sidebar-background: #ffffff;
 
   --radius-sm: 0.375rem;
@@ -31,30 +52,96 @@
   --radius-xl: 1rem;
 }
 
-.dark {
-  --color-background: #0b0d12;
-  --color-foreground: #e5e7eb;
-  --color-card: #11141b;
-  --color-card-foreground: #e5e7eb;
-  --color-primary: #a78bfa;
-  --color-primary-foreground: #0b0d12;
-  --color-secondary: #1b1f27;
-  --color-secondary-foreground: #e5e7eb;
-  --color-muted: #161a22;
-  --color-muted-foreground: #9ca3af;
-  --color-accent: #8b5cf6;
+/* Explicit cascading definitions — light mode defaults. Mirrors @theme so `var()`
+ * lookups from custom CSS (body, ::selection, aurora, gradient-text) always resolve. */
+:root {
+  --color-background: #fdf9eb;
+  --color-foreground: #27272a;
+  /* Card surface — barely-warm off-white instead of pure `#ffffff`. Pure white
+   * cards on a cream body read as cold alien blocks; this tone (very faint cream)
+   * harmonises with the warm background while still being clearly the lightest
+   * surface in the palette. */
+  --color-card: #fefcf3;
+  --color-card-foreground: #27272a;
+  --color-primary: #27272a;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f9f5e8;
+  --color-secondary-foreground: #27272a;
+  --color-muted: #faf6ea;
+  --color-muted-foreground: #4a4a4a;
+  --color-accent: #52525b;
   --color-accent-foreground: #ffffff;
+  --color-accent-2: #5a6c7d;
+  --color-amber: #f59e0b;
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #ede5cf;
+  --color-input: #fefcf3;
+  --color-ring: #27272a;
+  --color-sidebar-background: #ffffff;
+  /* Body surface gradient — gentle warm wash, near-white at top, slightly creamy at
+   * bottom. Used by the body itself; deliberately the LIGHTEST tones in the palette. */
+  --surface-top: #fefcf3;
+  --surface-bottom: #fdf9eb;
+
+  /* Glassmorphic tokens — translucent light warm cream fill + soft amber-tinted
+   * border. Tuned LIGHTER again so the bars feel like a soft warm wash rather than
+   * a saturated cream block. ~5% darker than `--color-background` at 70% alpha. */
+  --glass-bg: rgba(251, 240, 210, 0.7);
+  --glass-border: rgba(245, 158, 11, 0.18);
+  /* Elevation shadow — warm-tinted (amber-brown), used on header/footer for depth.
+   * Stronger than a neutral gray shadow because the page is warm cream — a cool
+   * gray shadow against beige looks dirty; an amber-brown shadow looks cohesive. */
+  --glass-shadow: rgba(146, 84, 0, 0.12);
+}
+
+/* Dark palette — same restrained indigo family, lifted for legibility on a dark
+ * slate. Primary + accent are kept close in lightness so gradient sweeps read as
+ * a single hue with subtle shimmer rather than two different colors. accent-2 is
+ * a quiet slate-grey, used sparingly. */
+/* Charcoal dark mode — neutral grayscale base (no blue undertone) so amber accents
+ * read as warm gold rather than aggressive orange. Foreground is light gray (`#f5f5f5`)
+ * for high contrast on charcoal. `--color-amber` is dialled down to amber-600
+ * (`#d97706`) which reads as a richer gold at night without losing the brand identity. */
+.dark {
+  --color-background: #1f1f1f;
+  --color-foreground: #f5f5f5;
+  --color-card: #2a2a2a;
+  --color-card-foreground: #f5f5f5;
+  --color-primary: #6b8ac4;
+  --color-primary-foreground: #1f1f1f;
+  --color-secondary: #2f2f2f;
+  --color-secondary-foreground: #f5f5f5;
+  --color-muted: #262626;
+  --color-muted-foreground: #b8b8b8;
+  --color-accent: #8aa4d4;
+  --color-accent-foreground: #1f1f1f;
+  --color-accent-2: #6b7280;
+  --color-amber: #d97706;
   --color-destructive: #f87171;
-  --color-destructive-foreground: #1f2937;
-  --color-border: #262c37;
-  --color-input: #11141b;
-  --color-ring: #a78bfa;
-  --color-sidebar-background: #0e1117;
+  --color-destructive-foreground: #1f1f1f;
+  --color-border: #3a3a3a;
+  --color-input: #2a2a2a;
+  --color-ring: #6b8ac4;
+  --color-sidebar-background: #1a1a1a;
+  /* Charcoal body gradient — top is a touch lifted (`#262626`) so the page doesn't
+   * read as flat black; bottom matches the main charcoal background. */
+  --surface-top: #262626;
+  --surface-bottom: #1f1f1f;
+
+  /* Glassmorphic tokens — dark mode uses a translucent charcoal fill + a subtle
+   * white-at-low-alpha border for the highlight edge. Slightly lifted from the body
+   * (~5-7% lighter charcoal) so the bars sit visibly above the page. */
+  --glass-bg: rgba(45, 45, 45, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  /* Dark elevation shadow — pure black at higher alpha than light mode (dark
+   * surfaces need bigger contrast to register as elevated). */
+  --glass-shadow: rgba(0, 0, 0, 0.35);
 }
 
 @layer base {
   * {
-    border-color: theme(colors.border);
+    border-color: var(--color-border);
   }
 
   html {
@@ -66,22 +153,46 @@
   }
 
   body {
-    background-color: theme(colors.background);
-    background-image:
-      radial-gradient(
-        circle at 20% 50%,
-        rgba(139, 92, 246, 0.03) 0%,
-        transparent 50%
-      ),
-      radial-gradient(
-        circle at 80% 20%,
-        rgba(167, 139, 250, 0.03) 0%,
-        transparent 50%
-      );
-    color: theme(colors.foreground);
+    /* Subtle vertical warm gradient on the body itself — top is barely-tinted,
+     * bottom is a touch creamier. The two stops live in CSS vars so dark mode flips
+     * them to charcoal tones (`--surface-top` / `--surface-bottom`) instead of
+     * sitting on hardcoded cream colors. */
+    background-color: var(--color-background);
+    background-image: linear-gradient(
+      180deg,
+      var(--surface-top) 0%,
+      var(--surface-bottom) 100%
+    );
+    color: var(--color-foreground);
     font-feature-settings:
       "rlig" 1,
-      "calt" 1;
+      "calt" 1,
+      "ss01" 1,
+      "cv11" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Headings inherit color from body — explicit just in case any global reset (Tailwind
+   * preflight, browser default) tries to set its own value. Belt + braces for the same
+   * reason as the duplicated :root block above. */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: inherit;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-primary) 25%, transparent);
+    color: var(--color-foreground);
+  }
+
+  :focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-ring) 70%, transparent);
+    outline-offset: 2px;
   }
 }
 
@@ -142,10 +253,13 @@
   @keyframes pulse-glow {
     0%,
     100% {
-      box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+      /* blue-600 (#2563eb) — matches the new primary token in alpha form so the
+       * glow stays in-family with the rest of the palette. Switched from indigo
+       * because indigo still read as violet to users; pure blue removes ambiguity. */
+      box-shadow: 0 0 20px rgba(37, 99, 235, 0.22);
     }
     50% {
-      box-shadow: 0 0 40px rgba(139, 92, 246, 0.5);
+      box-shadow: 0 0 36px rgba(37, 99, 235, 0.36);
     }
   }
 
@@ -158,6 +272,459 @@
     }
     100% {
       background-position: 0% 50%;
+    }
+  }
+
+  /* === GradientText — true ShinyText pattern with AMBER as the highlight colour.
+   * Text reads as the foreground (near-black) normally; a bright amber glint sweeps
+   * across every 5.5s. Pure ShinyText (foreground → amber → foreground), no blue
+   * stops — keeps the colour story restrained and ties the hero phrase directly to
+   * the brand-frame's amber halo so both moments share the same warm signal. */
+  .animate-gradient-text {
+    background-image: linear-gradient(
+      110deg,
+      var(--color-foreground) 30%,
+      var(--color-amber) 50%,
+      var(--color-foreground) 70%
+    );
+    background-size: 320% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradient-text 5.5s ease-in-out infinite;
+  }
+
+  @keyframes gradient-text {
+    0% {
+      background-position: 100% 0;
+    }
+    100% {
+      background-position: -100% 0;
+    }
+  }
+
+  /* === Brand frame — a holographic gradient border with a moving sheen. Two layers:
+   * the outer paints a tri-color gradient at 2px padding; the inner sits on top with
+   * the card colour so the gradient only shows as a ring. The gradient SWEEPS visibly
+   * (large background-size + 4s loop + linear ease) so the motion is felt, not
+   * imagined. Outer glow tinted to primary anchors the icon visually. */
+  .brand-frame {
+    position: relative;
+    padding: 1.5px;
+    border-radius: inherit;
+    /* Amber gradient (Tailwind amber-500 family) — deliberately OFF the blue primary so
+     * the brand-frame's animated halo provides warm contrast against the cool UI hue.
+     * The two-stop pattern stays: faint amber base + bright amber highlight sweeping
+     * across. Pairs with the avatar's amber ring in the AuthorDialog so the warm
+     * accent is consistent everywhere it appears. */
+    background: linear-gradient(
+      110deg,
+      color-mix(in srgb, var(--color-amber) 25%, transparent) 30%,
+      var(--color-amber) 50%,
+      color-mix(in srgb, var(--color-amber) 25%, transparent) 70%
+    );
+    background-size: 300% 100%;
+    animation: brand-frame-sweep 6s ease-in-out infinite;
+    box-shadow: 0 0 14px -4px
+      color-mix(in srgb, var(--color-amber) 35%, transparent);
+  }
+
+  .brand-frame-inner {
+    border-radius: inherit;
+    /* Card-surface fill — the gauge inside reads in `text-amber-700` (deep amber,
+     * AAA-passing on white) against a white inner with the lighter amber halo
+     * around the outside. Tonal monochrome: deep amber gauge + amber halo + neutral
+     * white inner = the brand's signature look. */
+    background: var(--color-card);
+  }
+
+  @keyframes brand-frame-sweep {
+    0% {
+      background-position: 100% 0;
+    }
+    100% {
+      background-position: -100% 0;
+    }
+  }
+
+  /* Gauge needle — rotates back and forth like a real meter measuring a live signal.
+   * Pivot point at (12, 16) in the SVG's viewBox matches the SkillGaugeLogo SVG's
+   * needle-base coordinate. Sweep range covers the visible arc band. */
+  .gauge-needle {
+    transform-origin: 12px 16px;
+    animation: gauge-needle-sweep 3.5s ease-in-out infinite;
+  }
+  @keyframes gauge-needle-sweep {
+    0%,
+    100% {
+      transform: rotate(-32deg);
+    }
+    50% {
+      transform: rotate(28deg);
+    }
+  }
+
+  /* === Lift card — visible hover transform for clickable cards. Lifts ~3px, casts
+   * a colored shadow tinted to primary, and brightens the border. Visible enough that
+   * users immediately understand the card is interactive. Combined with the existing
+   * Card chrome it reads as "click me, but I'm classy about it." */
+  .lift-card {
+    transition: transform 250ms cubic-bezier(0.32, 0.72, 0, 1),
+      box-shadow 250ms cubic-bezier(0.32, 0.72, 0, 1),
+      border-color 250ms ease;
+  }
+  .lift-card:hover {
+    transform: translateY(-3px);
+    box-shadow:
+      0 16px 32px -10px color-mix(in srgb, var(--color-primary) 35%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--color-primary) 30%, transparent);
+  }
+
+  /* === Pulse dot — radiating pulse rings for active-state indicators. Switched from
+   * primary blue to **amber** so the "live now" signal aligns with the brand-frame
+   * halo + score amber-ring + round badge. Live = warm = amber across the app. */
+  .pulse-dot {
+    position: relative;
+    background-color: var(--color-amber) !important;
+    animation: pulse-dot-core 2.2s ease-in-out infinite;
+  }
+  .pulse-dot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: 0 0 0 0 var(--color-amber);
+    animation: pulse-dot-ring 2.2s ease-out infinite;
+  }
+  @keyframes pulse-dot-core {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 0.95;
+    }
+    50% {
+      transform: scale(1.3);
+      opacity: 1;
+    }
+  }
+  @keyframes pulse-dot-ring {
+    0% {
+      box-shadow: 0 0 0 0
+        color-mix(in srgb, var(--color-amber) 70%, transparent);
+    }
+    70% {
+      box-shadow: 0 0 0 10px
+        color-mix(in srgb, var(--color-amber) 0%, transparent);
+    }
+    100% {
+      box-shadow: 0 0 0 0
+        color-mix(in srgb, var(--color-amber) 0%, transparent);
+    }
+  }
+
+  /* === Shimmer skeleton — a moving sheen overlay for skeleton placeholders. Real
+   * motion (left → right gradient) instead of opacity-pulse, which reads as more
+   * polished and matches the brand-frame sweep direction. */
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+    background: var(--color-muted);
+  }
+  .shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in srgb, var(--color-foreground) 6%, transparent) 50%,
+      transparent 100%
+    );
+    animation: shimmer-sweep 1.8s ease-in-out infinite;
+  }
+  @keyframes shimmer-sweep {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  /* === Icon tile — small gradient-bordered tile around a single Lucide icon. The
+   * border is a thin holographic gradient (same family as `.brand-frame` but smaller);
+   * on hover the tile lifts slightly + the inner background brightens. Used inside
+   * dashboard panel headers and About-dialog section headings to give icons real
+   * visual presence rather than the generic Tailwind background-tile look. */
+  .icon-tile {
+    position: relative;
+    padding: 1px;
+    border-radius: 0.5rem;
+    /* Same lightness-sweep pattern as brand-frame — faint primary base with a bright
+     * primary highlight that visibly moves across. */
+    background: linear-gradient(
+      110deg,
+      color-mix(in srgb, var(--color-primary) 18%, transparent) 30%,
+      var(--color-primary) 50%,
+      color-mix(in srgb, var(--color-primary) 18%, transparent) 70%
+    );
+    background-size: 300% 100%;
+    animation: brand-frame-sweep 7s ease-in-out infinite;
+    transition: transform 200ms ease, box-shadow 200ms ease;
+  }
+  .icon-tile:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px -4px
+      color-mix(in srgb, var(--color-primary) 40%, transparent);
+  }
+  .icon-tile-inner {
+    background: var(--color-card);
+    border-radius: calc(0.5rem - 1px);
+  }
+
+  /* === Stagger-fade — children of a `.stagger-fade` parent fade up in sequence. Used
+   * on the dashboard's panel stack so the page reveals with rhythm instead of all at
+   * once. Each direct child gets a 80ms-stepped animation-delay; cap at 6 for safety. */
+  .stagger-fade > * {
+    opacity: 0;
+    animation: fade-in 0.6s ease-out forwards;
+  }
+  .stagger-fade > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .stagger-fade > *:nth-child(2) {
+    animation-delay: 80ms;
+  }
+  .stagger-fade > *:nth-child(3) {
+    animation-delay: 160ms;
+  }
+  .stagger-fade > *:nth-child(4) {
+    animation-delay: 240ms;
+  }
+  .stagger-fade > *:nth-child(5) {
+    animation-delay: 320ms;
+  }
+  .stagger-fade > *:nth-child(n + 6) {
+    animation-delay: 400ms;
+  }
+
+  /* === Section accent — vertical gradient bar used as a left-edge accent on About
+   * dialog sections. More structural than ornamental; gives each section a clear
+   * boundary without resorting to outlined cards. */
+  .section-accent {
+    position: relative;
+    padding-left: 1rem;
+  }
+  .section-accent::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.25rem;
+    bottom: 0.25rem;
+    width: 2px;
+    border-radius: 2px;
+    background: linear-gradient(
+      180deg,
+      var(--color-primary),
+      var(--color-accent-2)
+    );
+    opacity: 0.8;
+  }
+
+  /* === Glassmorphic surfaces — translucent fill + heavy backdrop-blur + saturation
+   * boost + subtle border. The body's warm gradient peeks through the blur, giving
+   * each elevated bar a "frosted glass" feel that's distinct from the page without
+   * being a heavy color block. Pattern lifted from reactbits.dev's glass surfaces +
+   * iOS / macOS system bars.
+   *
+   * Theme-aware via `--glass-bg` + `--glass-border` (set on :root for light, on
+   * `.dark` for dark mode). Both modes use 16px blur + saturation 1.6 — enough to
+   * create the glass effect without smearing the gradient underneath into mud. */
+  .header-surface {
+    background-color: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(1.8);
+    -webkit-backdrop-filter: blur(20px) saturate(1.8);
+    border-bottom: 1px solid var(--glass-border);
+    /* Two-layer shadow — close shadow for the edge crispness, far shadow for the
+     * volumetric depth. Both warm-tinted so they sit cohesively on the cream body. */
+    box-shadow:
+      0 1px 0 0 var(--glass-border),
+      0 8px 24px -10px var(--glass-shadow),
+      0 16px 40px -16px var(--glass-shadow);
+  }
+  .footer-surface {
+    background-color: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(1.8);
+    -webkit-backdrop-filter: blur(20px) saturate(1.8);
+    border-top: 1px solid var(--glass-border);
+    box-shadow:
+      0 -1px 0 0 var(--glass-border),
+      0 -8px 24px -10px var(--glass-shadow),
+      0 -16px 40px -16px var(--glass-shadow);
+  }
+  .sidebar-surface {
+    background-color: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(1.8);
+    -webkit-backdrop-filter: blur(20px) saturate(1.8);
+    box-shadow:
+      1px 0 0 0 var(--glass-border),
+      8px 0 24px -10px var(--glass-shadow);
+  }
+
+  /* === Subtle main-area gradient — a very low-opacity primary-tinted gradient that
+   * shifts slowly across the page surface. Sits BEHIND the content layer (z-index
+   * negative via the wrapper class), TINTS the whole main-area surface a barely-
+   * perceptible shade so the area feels distinct from the solid header/footer.
+   * Pure CSS, GPU-accelerated, no JS. */
+  .main-bg-gradient {
+    position: relative;
+    isolation: isolate;
+  }
+  .main-bg-gradient::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--color-primary) 4%, transparent) 0%,
+      transparent 35%,
+      color-mix(in srgb, var(--color-accent) 3%, transparent) 70%,
+      transparent 100%
+    );
+    background-size: 200% 200%;
+    animation: main-bg-drift 28s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .dark .main-bg-gradient::before {
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--color-primary) 6%, transparent) 0%,
+      transparent 35%,
+      color-mix(in srgb, var(--color-accent) 5%, transparent) 70%,
+      transparent 100%
+    );
+    background-size: 200% 200%;
+  }
+
+  @keyframes main-bg-drift {
+    0%,
+    100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  /* === Aurora — three soft drifting orbs as ambient backdrop. Pure CSS, no canvas.
+   * Opacity is intentionally tuned so the orbs read as a faint glow against the
+   * background, never as visible colorful blobs. */
+  .aurora-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(96px);
+    opacity: 0.22;
+    will-change: transform;
+  }
+
+  .dark .aurora-orb {
+    opacity: 0.12;
+  }
+
+  .aurora-orb-a {
+    width: 60vw;
+    height: 60vw;
+    max-width: 720px;
+    max-height: 720px;
+    background: radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--color-primary) 40%, transparent) 0%,
+      transparent 65%
+    );
+    top: -22%;
+    left: -16%;
+    animation: aurora-drift-a 32s ease-in-out infinite;
+  }
+
+  .aurora-orb-b {
+    width: 55vw;
+    height: 55vw;
+    max-width: 660px;
+    max-height: 660px;
+    background: radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--color-accent-2) 35%, transparent) 0%,
+      transparent 65%
+    );
+    bottom: -25%;
+    right: -18%;
+    animation: aurora-drift-b 38s ease-in-out infinite;
+  }
+
+  .aurora-orb-c {
+    width: 45vw;
+    height: 45vw;
+    max-width: 540px;
+    max-height: 540px;
+    background: radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--color-accent) 30%, transparent) 0%,
+      transparent 65%
+    );
+    top: 20%;
+    right: -8%;
+    animation: aurora-drift-c 44s ease-in-out infinite;
+  }
+
+  @keyframes aurora-drift-a {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+    50% {
+      transform: translate(8%, 6%) scale(1.08);
+    }
+  }
+
+  @keyframes aurora-drift-b {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+    50% {
+      transform: translate(-6%, -8%) scale(1.05);
+    }
+  }
+
+  @keyframes aurora-drift-c {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+    50% {
+      transform: translate(-10%, 5%) scale(1.12);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-gradient-text,
+    .animate-float,
+    .animate-pulse-glow,
+    .animate-gradient,
+    .aurora-orb,
+    .brand-frame,
+    .icon-tile,
+    .pulse-dot,
+    .pulse-dot::after,
+    .shimmer::after,
+    .main-bg-gradient::before,
+    .gauge-needle,
+    .stagger-fade > * {
+      animation: none !important;
+      opacity: 1 !important;
+    }
+    .lift-card {
+      transition: none !important;
     }
   }
 }

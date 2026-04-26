@@ -16,99 +16,241 @@
  *   - INPUT_TOO_LARGE            (413) — single LLM call's input exceeded MAX_INPUT_CHARS
  */
 
-import type { FastifyInstance } from "fastify";
+import { Router, type Application, type NextFunction, type Request, type Response } from "express";
 import { requireAuth } from "@/plugins/auth";
 import { answerSchema, initSessionSchema } from "@/shared/contracts";
 import { SessionError, sessionsService } from "./sessions.service";
 
-export async function sessionRoutes(app: FastifyInstance): Promise<void> {
-  // Every session route requires auth — apply the hook at the route level so a missed
-  // decorator on a single route can't accidentally expose data.
-  app.addHook("preHandler", requireAuth);
+// Same wrap helper used in auth.routes.ts. Express 5 supports Promise rejection
+// natively, but wrapping makes intent obvious and tolerates synchronous throws too.
+type AsyncHandler = (req: Request, res: Response) => Promise<void | Response>;
+const wrap = (fn: AsyncHandler) => (req: Request, res: Response, next: NextFunction) =>
+  Promise.resolve(fn(req, res)).catch(next);
 
-  app.post("/api/sessions", async (request, reply) => {
-    const parsed = initSessionSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({
-        code: "INVALID_FORMAT",
-        message: "Invalid session request",
-      });
-    }
-    try {
-      const result = await sessionsService.initialize(
-        request.userId!,
-        parsed.data,
-      );
-      return reply.code(201).send(result);
-    } catch (err) {
-      if (err instanceof SessionError) {
-        return reply
-          .code(statusForSessionError(err.code))
-          .send({ code: codeForSessionError(err.code), message: err.message });
+export function sessionRoutes(app: Application): void {
+  const router = Router();
+
+  // Every session route requires auth — apply at the router level so a missed
+  // middleware on a single route can't accidentally expose data.
+  router.use(requireAuth);
+
+  // List the current user's sessions newest-first. Replaces the localStorage archive
+  // for authenticated users; the FE sidebar queries this and falls back to the local
+  // archive only when offline / 401.
+  router.get(
+    "/",
+    wrap(async (req, res) => {
+      const sessions = await sessionsService.listSessions(req.userId!);
+      res.json({ sessions });
+    }),
+  );
+
+  // Hydrate a session's full transcript. Used to "open" a past session from the
+  // sidebar — the FE replays the messages array into MessageBubbles in order.
+  router.get(
+    "/:id/messages",
+    wrap(async (req, res) => {
+      const { id } = req.params as { id: string };
+      try {
+        const messages = await sessionsService.listMessages(req.userId!, id);
+        res.json({ messages });
+      } catch (err) {
+        if (err instanceof SessionError) {
+          res
+            .status(statusForSessionError(err.code))
+            .json({ code: codeForSessionError(err.code), message: err.message });
+          return;
+        }
+        throw err;
       }
-      throw err;
-    }
-  });
+    }),
+  );
 
-  app.get<{ Params: { id: string; index: string } }>(
-    "/api/sessions/:id/questions/:index",
-    async (request, reply) => {
-      const index = Number.parseInt(request.params.index, 10);
+  router.post(
+    "/",
+    wrap(async (req, res) => {
+      const parsed = initSessionSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({
+          code: "INVALID_FORMAT",
+          message: "Invalid session request",
+        });
+        return;
+      }
+      try {
+        const result = await sessionsService.initialize(
+          req.userId!,
+          parsed.data,
+        );
+        res.status(201).json(result);
+      } catch (err) {
+        if (err instanceof SessionError) {
+          res
+            .status(statusForSessionError(err.code))
+            .json({ code: codeForSessionError(err.code), message: err.message });
+          return;
+        }
+        throw err;
+      }
+    }),
+  );
+
+  router.get(
+    "/:id/questions/:index",
+    wrap(async (req, res) => {
+      // Express 5 widens req.params values to `string | string[]` to accommodate the
+      // new wildcard matcher (`*` / `**`). Our paths only use single-segment `:name`
+      // captures, which always resolve to `string`, so we narrow once here.
+      const { id, index: indexParam } = req.params as { id: string; index: string };
+      const index = Number.parseInt(indexParam, 10);
       if (!Number.isInteger(index) || index < 0) {
-        return reply.code(400).send({
+        res.status(400).json({
           code: "INVALID_FORMAT",
           message: "Invalid question index",
         });
+        return;
       }
       try {
         const msg = await sessionsService.getQuestion(
-          request.userId!,
-          request.params.id,
+          req.userId!,
+          id,
           index,
         );
-        return reply.send(msg);
+        res.json(msg);
       } catch (err) {
         if (err instanceof SessionError) {
-          return reply
-            .code(statusForSessionError(err.code))
-            .send({ code: codeForSessionError(err.code), message: err.message });
+          res
+            .status(statusForSessionError(err.code))
+            .json({ code: codeForSessionError(err.code), message: err.message });
+          return;
         }
         throw err;
       }
-    },
+    }),
   );
 
-  app.post<{ Params: { id: string } }>(
-    "/api/sessions/:id/answers",
-    async (request, reply) => {
-      const parsed = answerSchema.safeParse(request.body);
+  // Re-answer a past question. Body: { answer: string }. Returns { answerMsg, feedback }.
+  // Doesn't advance the session — the original Q/A/F row stays; the retry appends
+  // new answer + feedback rows at the end of the transcript.
+  router.post(
+    "/:id/questions/:index/reanswer",
+    wrap(async (req, res) => {
+      const { id, index: indexParam } = req.params as {
+        id: string;
+        index: string;
+      };
+      const index = Number.parseInt(indexParam, 10);
+      if (!Number.isInteger(index) || index < 0) {
+        res.status(400).json({
+          code: "INVALID_FORMAT",
+          message: "Invalid question index",
+        });
+        return;
+      }
+      const parsed = answerSchema.safeParse(req.body);
       if (!parsed.success) {
-        return reply.code(400).send({
+        res.status(400).json({
           code: "INVALID_FORMAT",
           message: "Invalid answer payload",
         });
+        return;
       }
       try {
-        const result = await sessionsService.submitAnswer(
-          request.userId!,
-          request.params.id,
+        const result = await sessionsService.reanswer(
+          req.userId!,
+          id,
+          index,
           parsed.data.answer,
         );
-        return reply.send(result);
+        res.json(result);
       } catch (err) {
         if (err instanceof SessionError) {
-          return reply
-            .code(statusForSessionError(err.code))
-            .send({ code: codeForSessionError(err.code), message: err.message });
+          res
+            .status(statusForSessionError(err.code))
+            .json({ code: codeForSessionError(err.code), message: err.message });
+          return;
         }
         throw err;
       }
-    },
+    }),
   );
+
+  router.post(
+    "/:id/rounds/next",
+    wrap(async (req, res) => {
+      const { id } = req.params as { id: string };
+      try {
+        const result = await sessionsService.nextRound(req.userId!, id);
+        res.status(201).json(result);
+      } catch (err) {
+        if (err instanceof SessionError) {
+          res
+            .status(statusForSessionError(err.code))
+            .json({ code: codeForSessionError(err.code), message: err.message });
+          return;
+        }
+        throw err;
+      }
+    }),
+  );
+
+  // Delete a session — cascades to its messages + memories. Returns 204 on success.
+  // Idempotent: a second call after success returns 404 SESSION_NOT_FOUND.
+  router.delete(
+    "/:id",
+    wrap(async (req, res) => {
+      const { id } = req.params as { id: string };
+      try {
+        await sessionsService.deleteSession(req.userId!, id);
+        res.status(204).send();
+      } catch (err) {
+        if (err instanceof SessionError) {
+          res
+            .status(statusForSessionError(err.code))
+            .json({ code: codeForSessionError(err.code), message: err.message });
+          return;
+        }
+        throw err;
+      }
+    }),
+  );
+
+  router.post(
+    "/:id/answers",
+    wrap(async (req, res) => {
+      const { id } = req.params as { id: string };
+      const parsed = answerSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({
+          code: "INVALID_FORMAT",
+          message: "Invalid answer payload",
+        });
+        return;
+      }
+      try {
+        const result = await sessionsService.submitAnswer(
+          req.userId!,
+          id,
+          parsed.data.answer,
+        );
+        res.json(result);
+      } catch (err) {
+        if (err instanceof SessionError) {
+          res
+            .status(statusForSessionError(err.code))
+            .json({ code: codeForSessionError(err.code), message: err.message });
+          return;
+        }
+        throw err;
+      }
+    }),
+  );
+
+  app.use("/api/sessions", router);
 }
 
-// HTTP status by SessionError code. Centralized so future code adds slot in here, not
-// in scattered ternaries across two routes.
+// HTTP status by SessionError code. Centralized so future codes slot in here, not in
+// scattered ternaries across two routes.
 function statusForSessionError(code: SessionError["code"]): number {
   switch (code) {
     case "FORBIDDEN":
@@ -117,6 +259,7 @@ function statusForSessionError(code: SessionError["code"]): number {
       return 404;
     case "ALREADY_COMPLETE":
     case "INDEX_MISMATCH":
+    case "NOT_COMPLETE":
       return 409;
     case "RESUME_PARSE_FAILED":
       return 400;
@@ -154,5 +297,7 @@ function codeForSessionError(code: SessionError["code"]): string {
       return "QUOTA_EXCEEDED";
     case "INPUT_TOO_LARGE":
       return "INPUT_TOO_LARGE";
+    case "NOT_COMPLETE":
+      return "ROUND_NOT_COMPLETE";
   }
 }

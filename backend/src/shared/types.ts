@@ -23,6 +23,12 @@ export interface Session {
   // the FE sidebar's "View resume" dialog can display it directly without re-parsing.
   resumeContent?: string;
   resumeFileName?: string;
+  // Round chaining. One session can extend through multiple rounds; round 2+ ramps
+  // difficulty and references prior weak areas. `currentRound` starts at 1 and bumps
+  // via POST /api/sessions/:id/rounds/next. `questionsPerRound` is the size of each
+  // round (defaults to the original questionCount).
+  currentRound?: number;
+  questionsPerRound?: number;
 }
 
 export interface Feedback {
@@ -42,6 +48,11 @@ export interface Message {
 export type InterviewStyle = "behavioral" | "technical" | "mixed";
 export type DifficultyLevel = "easy" | "medium" | "hard";
 export type RoleLevel = "junior" | "mid" | "senior" | "lead";
+export type InterviewerPersona =
+  | "neutral"
+  | "faang"
+  | "startup"
+  | "consulting";
 
 export interface SessionInitRequest {
   resumeFileName: string;
@@ -56,4 +67,7 @@ export interface SessionInitRequest {
   roleLevel: RoleLevel;
   questionCount: number;
   focusAreas?: string;
+  // Optional interviewer flavour — `neutral` when omitted. Tilts the system prompt's
+  // tone and rubric (FAANG / startup / consulting / neutral).
+  interviewerPersona?: InterviewerPersona;
 }

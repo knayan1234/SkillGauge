@@ -36,18 +36,20 @@ import { fetchHealthInfo } from "@/services/api";
 
 // Friendly label for each provider. Centralized so future providers (e.g. Ollama,
 // Bedrock) just add an entry and the badge picks it up without touching JSX.
-const PROVIDER_LABEL: Record<"stub" | "openai" | "anthropic", string> = {
+const PROVIDER_LABEL: Record<"stub" | "openai" | "anthropic" | "gemini", string> = {
   stub: "stub",
   openai: "openai",
   anthropic: "anthropic",
+  gemini: "gemini",
 };
 
 // Hover tooltip text per provider. The "stub" tooltip is the most important — it sets
 // the expectation that stub-mode grades are deterministic, not real AI evaluation.
-const PROVIDER_TOOLTIP: Record<"stub" | "openai" | "anthropic", string> = {
+const PROVIDER_TOOLTIP: Record<"stub" | "openai" | "anthropic" | "gemini", string> = {
   stub: "Stub provider — deterministic canned questions and length-proxy scoring. A real LLM is wired separately when its API key is configured.",
   openai: "OpenAI — questions and grading are produced by an OpenAI model.",
   anthropic: "Anthropic Claude — questions and grading are produced by a Claude model.",
+  gemini: "Google Gemini — questions and grading are produced by a Gemini model. Free tier with 1M-token context.",
 };
 
 export function LlmBadge() {

@@ -46,4 +46,64 @@ export const messagesRepo = {
       .sort({ createdAt: 1 })
       .toArray();
   },
+
+  /**
+   * Cascade-delete every message tied to a given session. Called from the service
+   * layer when a user deletes a chatroom; never expose this without an ownership
+   * check upstream.
+   */
+  async deleteBySession(sessionId: string): Promise<void> {
+    await (await messages()).deleteMany({ sessionId });
+  },
+
+  /**
+   * Distinct question texts asked across all sessions for a given user + résumé file
+   * name. Backs (a) the question-bank dashboard panel — proves the "no repeated
+   * questions" claim by surfacing the running list — and (b) the non-repetition guard
+   * in the question generator: the planner reads this list and instructs the LLM to
+   * avoid topics already covered for this résumé.
+   *
+   * Two-stage aggregation: filter messages by `type: "question"` joined to sessions
+   * filtered by `userId + resumeFileName`. The number of past questions per résumé
+   * stays small (a few hundred at most), so the in-memory lookup is fine — promote
+   * to a dedicated index only if profiling shows a hot path here.
+   */
+  async findQuestionsByResume(
+    userId: string,
+    resumeFileName: string,
+  ): Promise<Array<{ content: string; createdAt: string; sessionId: string }>> {
+    const db = await getDb();
+    const cursor = db.collection<MessageDoc>("messages").aggregate<{
+      content: string;
+      createdAt: string;
+      sessionId: string;
+    }>([
+      { $match: { type: "question" } },
+      {
+        $lookup: {
+          from: "sessions",
+          localField: "sessionId",
+          foreignField: "_id",
+          as: "session",
+        },
+      },
+      { $unwind: "$session" },
+      {
+        $match: {
+          "session.userId": userId,
+          "session.resumeFileName": resumeFileName,
+        },
+      },
+      { $sort: { createdAt: 1 } },
+      {
+        $project: {
+          _id: 0,
+          content: 1,
+          createdAt: 1,
+          sessionId: 1,
+        },
+      },
+    ]);
+    return cursor.toArray();
+  },
 };

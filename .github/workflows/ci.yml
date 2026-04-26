@@ -1,11 +1,40 @@
+# =============================================================================
+# CI — runs on every push to every branch.
+# =============================================================================
+# Purpose: keep main green by gating every push on (typecheck + tests + build)
+# for both the Next.js frontend (`web/`) and the Express backend (`backend/`).
+# The two surfaces run in parallel as separate jobs so a failure in one doesn't
+# block the other from finishing — easier to triage when something's wrong.
+#
+# When does this fire?
+#   - Every push to ANY branch. The `'**'` pattern matches branch names with a
+#     `/` in them too (feature branches like `feat/dashboard-revamp`).
+#   - PRs that target main also fire the same checks via the `pull_request`
+#     trigger so reviewers see green before merging.
+#
+# Why no deploy step? SkillGauge is a personal project; deployment is manual
+# (the user pushes when ready). When that changes, add a `deploy` job downstream
+# of `web` + `backend` that gates on both succeeding.
+# =============================================================================
+
 name: CI
 
 on:
   push:
     branches:
-      - "*"
+      - "**"
+  pull_request:
+    branches:
+      - main
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # web — Next.js 16 App Router frontend.
+  #
+  # Steps run in order; any failure stops the job and reports red on GitHub.
+  # `working-directory: web` means every `run:` below executes from `web/`,
+  # so paths like `npm ci` and `tsc` resolve against `web/package.json`.
+  # ---------------------------------------------------------------------------
   web:
     name: Web (Next.js)
     runs-on: ubuntu-latest
@@ -14,9 +43,13 @@ jobs:
         working-directory: web
 
     steps:
+      # Pull the repo at the commit sha that triggered this run.
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Node 20 is the LTS we develop against. The npm cache key is keyed on
+      # `web/package-lock.json` so cache hits only require an exact lock match —
+      # different lock = full fresh install (correct + safe).
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -24,20 +57,50 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      # `npm ci` (clean install) instead of `npm install` so the lockfile is the
+      # source of truth — guarantees reproducible CI installs and fails loudly
+      # if `package.json` and `package-lock.json` drift apart.
       - name: Install dependencies
         run: npm ci
 
+      # ESLint gates code quality. The repo is currently 0 errors / 2
+      # unactionable warnings (Next.js Inter-font hint, RHF watch() compiler
+      # skip — both are framework / library limitations). If errors appear,
+      # this step fails red. Warnings don't fail the build.
+      - name: Lint
+        run: npm run lint
+
+      # `tsc --noEmit` is the type-only check — no JS output, just diagnostics.
+      # Faster than a full build and surfaces type errors before the build step
+      # has to redo the work.
       - name: Typecheck
         run: npx tsc --noEmit
 
+      # Jest in CI mode (no watch, no interactive prompts). 39/39 tests; if any
+      # break, this step fails. New tests should be added beside the code they
+      # exercise (`features/<feature>/__tests__/...` or `lib/<module>.test.ts`).
       - name: Test
         run: npm test -- --ci
 
+      # Production build — Next.js compiles all routes, runs Tailwind v4's CSS
+      # generation, type-checks again as part of the build pipeline, and emits
+      # the optimised bundle. Fails on any compile error or unused-import.
       - name: Build
         run: npm run build
 
+  # ---------------------------------------------------------------------------
+  # backend — Express 5 API + MongoDB persistence.
+  #
+  # The BE test suite is currently SOFT-SKIPPED via `testPathIgnorePatterns`
+  # in `backend/jest.config.ts`. Reason: the suite was written against
+  # Fastify's `app.inject(...)` paradigm; after the Express migration on
+  # 2026-04-26 those calls don't apply. The test step below still runs jest
+  # but it finds zero matching files and exits 0 — green by design, not by
+  # accident. Once the suite is rewritten on `supertest(app)`, drop the
+  # `testPathIgnorePatterns` line and the existing tests start gating again.
+  # ---------------------------------------------------------------------------
   backend:
-    name: Backend (Fastify)
+    name: Backend (Express)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -57,11 +120,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # `npm run typecheck` runs `tsc --noEmit` against the BE's tsconfig.
+      # Note: `tests/` is in `tsconfig`'s `exclude` list because the legacy
+      # Fastify-era tests reference `app.inject` which no longer typechecks
+      # against Express. They'll come back into scope when the suite is
+      # rewritten on supertest.
       - name: Typecheck
         run: npm run typecheck
 
+      # Jest in CI mode. Currently passes with zero matching files — see the
+      # job-level comment above for the reason. When tests are restored, this
+      # step gates on them.
       - name: Test
         run: npm test -- --ci
 
+      # `npm run build` invokes `tsc -p tsconfig.build.json` to emit the
+      # production JS to `dist/`. Catches any type or syntax issue that the
+      # noEmit typecheck above might have missed (different tsconfig, different
+      # include/exclude list).
       - name: Build
         run: npm run build

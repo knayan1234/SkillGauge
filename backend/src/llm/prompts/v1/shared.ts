@@ -11,6 +11,7 @@
 
 import type {
   DifficultyLevel,
+  InterviewerPersona,
   InterviewStyle,
   RoleLevel,
 } from "@/shared/types";
@@ -50,6 +51,26 @@ export const STYLE_DESCRIPTION: Record<InterviewStyle, string> = {
   technical: "technical — focus on engineering knowledge and problem-solving",
   mixed:
     "mixed — alternate behavioral and technical questions, biased toward the difficulty selected",
+};
+
+/**
+ * Persona descriptors. Tilts the system prompt toward a specific interviewer
+ * flavour. `neutral` returns an empty string so the base prompt is unchanged —
+ * sessions without a persona keep the unflavoured behaviour.
+ *
+ * Why prose-only and not a separate prompt template per persona: the variation is
+ * small (tone + rubric emphasis); a dedicated template per persona would balloon
+ * the prompt set and duplicate 90% of the content. One sentence injected into the
+ * existing system prompt is the minimum that delivers the differentiation.
+ */
+export const PERSONA_DESCRIPTION: Record<InterviewerPersona, string> = {
+  neutral: "",
+  faang:
+    "You are interviewing on behalf of a large-scale tech company (FAANG-style). Lean on rigorous problem-solving, scale considerations, and structured behavioural rubrics (e.g. STAR). Push back on hand-wavy answers and probe for tradeoffs and quantitative reasoning.",
+  startup:
+    "You are interviewing on behalf of an early-stage startup. Bias toward scrappiness, ownership, and end-to-end execution. Reward concrete examples of shipping with limited resources; weight attitude and adaptability alongside raw skill.",
+  consulting:
+    "You are interviewing on behalf of a strategy / management consulting firm. Probe structured thinking (frameworks, MECE), stakeholder communication, and ability to drive ambiguous outcomes. Reward clear logical scaffolding even when the candidate doesn't have a domain answer.",
 };
 
 /**

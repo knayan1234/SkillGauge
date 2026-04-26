@@ -8,8 +8,14 @@ export const metadata: Metadata = {
 };
 
 // themeColor must live on `viewport`, not `metadata` — Next 16 warns and ignores it otherwise.
+// Matched to the active theme: `#fafaf8` is the light-mode `--color-background`, `#0d1018`
+// is the dark-mode equivalent. The `media` discriminator lets the OS chrome (mobile address
+// bar, PWA chrome) reflect the user's preferred scheme even before next-themes hydrates.
 export const viewport: Viewport = {
-  themeColor: "#fafafa",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fafaf8" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d1018" },
+  ],
 };
 
 export default function RootLayout({

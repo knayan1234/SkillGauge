@@ -16,6 +16,8 @@
 # next.js
 /.next/
 /out/
+# SWC compile cache (regenerated on every dev/build run)
+/.swc/
 
 # production
 /build

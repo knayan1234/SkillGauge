@@ -24,6 +24,7 @@
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
+import { LinkIcon } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import {
   Card,
@@ -32,6 +33,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/EmptyState";
 import { PasswordResetForm } from "@/features/auth/PasswordResetForm";
 
 function ResetPageContent() {
@@ -56,17 +59,16 @@ function ResetPageContent() {
             {token ? (
               <PasswordResetForm token={token} />
             ) : (
-              <div className="text-center space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Request a new reset link from the sign-in dialog.
-                </p>
-                <Link
-                  href="/"
-                  className="text-sm text-primary hover:underline"
-                >
-                  Back to home
-                </Link>
-              </div>
+              <EmptyState
+                icon={LinkIcon}
+                title="This reset link looks broken"
+                description="Make sure you used the most recent link. They expire 30 minutes after they're issued. You can request a new one from the sign-in dialog."
+                action={
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/">Back to home</Link>
+                  </Button>
+                }
+              />
             )}
           </CardContent>
         </Card>

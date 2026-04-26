@@ -1,4 +1,4 @@
-// Real HTTP client. Talks to the Fastify backend over JSON with cookie auth.
+// Real HTTP client. Talks to the Express backend over JSON with cookie auth.
 // Swap target: whatever API_BASE points at (local dev → http://localhost:4000).
 // Signatures match ARCHITECTURE.md §13 contract.
 
@@ -24,6 +24,11 @@ export interface Session {
   // sidebar "View résumé" dialog to display the text the LLM is grading against.
   resumeContent?: string;
   resumeFileName?: string;
+  // Round chaining: one session can extend through multiple rounds where round 2+
+  // ramps difficulty and references prior weak areas. Defaults: round 1,
+  // questionsPerRound = original questionCount.
+  currentRound?: number;
+  questionsPerRound?: number;
 }
 
 export interface Message {
@@ -38,10 +43,15 @@ export interface Message {
   };
 }
 
-// Must mirror sessionSetupSchema enums + backend sessions.schema.ts.
+// Must mirror sessionSetupSchema enums + backend contracts.ts.
 export type InterviewStyle = "behavioral" | "technical" | "mixed";
 export type DifficultyLevel = "easy" | "medium" | "hard";
 export type RoleLevel = "junior" | "mid" | "senior" | "lead";
+export type InterviewerPersona =
+  | "neutral"
+  | "faang"
+  | "startup"
+  | "consulting";
 
 export interface SessionOptions {
   interviewStyle: InterviewStyle;
@@ -49,6 +59,8 @@ export interface SessionOptions {
   roleLevel: RoleLevel;
   questionCount: number;
   focusAreas?: string;
+  // Optional; defaults to "neutral" at the BE if omitted.
+  interviewerPersona?: InterviewerPersona;
 }
 
 export interface SessionInitRequest extends SessionOptions {
@@ -67,9 +79,15 @@ export interface AnswerResult {
   isComplete: boolean;
 }
 
-// Allow overriding via env for staged deploys; default matches the backend dev port.
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+// Same-origin BFF path. Every `/api/*` call from the browser lands on the Next route
+// handler at [web/app/api/[...path]/route.ts](../../web/app/api/[...path]/route.ts),
+// which proxies server-side to the Express backend (`process.env.BACKEND_URL`). Two wins:
+//   1. No CORS preflights — same-origin requests don't need them.
+//   2. The BE hostname stays out of the JS bundle — `BACKEND_URL` is server-only.
+//
+// `NEXT_PUBLIC_API_BASE_URL` was the old direct-to-Express URL; it's now ignored on the
+// FE (still read by the BFF as a fallback) so .env.local files keep working unchanged.
+const API_BASE = "";
 
 export class ApiError extends Error {
   constructor(
@@ -161,9 +179,9 @@ export async function confirmPasswordReset(
 // staleTime: Infinity since the value rarely changes (only when ops swap LLM_PROVIDER
 // in env and restart the server — a deploy event the user isn't expected to see live).
 export interface HealthInfo {
-  llmProvider: "stub" | "openai" | "anthropic";
-  // Populated with the model name (e.g. "gpt-4o-mini") when a real provider is
-  // configured; null when LLM_PROVIDER=stub.
+  llmProvider: "stub" | "openai" | "anthropic" | "gemini";
+  // Populated with the model name (e.g. "gpt-4o-mini" / "gemini-2.0-flash") when a
+  // real provider is configured; null when LLM_PROVIDER=stub.
   llmModel: string | null;
 }
 
@@ -192,15 +210,6 @@ export async function initializeSession(
   });
 }
 
-export async function getNextQuestion(
-  sessionId: string,
-  questionIndex: number,
-): Promise<Message> {
-  return apiFetch<Message>(
-    `/api/sessions/${encodeURIComponent(sessionId)}/questions/${questionIndex}`,
-  );
-}
-
 export async function submitAnswer(
   sessionId: string,
   answer: string,
@@ -212,4 +221,101 @@ export async function submitAnswer(
       body: JSON.stringify({ answer }),
     },
   );
+}
+
+// Start the next round on a completed session — bumps `currentRound`, extends
+// `totalQuestions`, re-activates the session, and returns the first question of the
+// new round. The transcript stays one growing thread (option B chaining); the prompt
+// renderer ramps difficulty and references prior weak areas in round 2+.
+export async function startNextRound(
+  sessionId: string,
+): Promise<{ session: Session; firstQuestion: Message }> {
+  return apiFetch(
+    `/api/sessions/${encodeURIComponent(sessionId)}/rounds/next`,
+    { method: "POST" },
+  );
+}
+
+// List the current user's sessions newest-first. Replaces the localStorage archive
+// for authenticated users; falls back to the archive only when offline / unauth.
+export async function listSessions(): Promise<Session[]> {
+  const res = await apiFetch<{ sessions: Session[] }>("/api/sessions");
+  return res.sessions;
+}
+
+// Delete a session and every row that references it (messages + memories). The
+// backend cascades; the FE invalidates the sessions cache after this resolves so
+// the sidebar drops the entry immediately.
+export async function deleteSession(sessionId: string): Promise<void> {
+  await apiFetch<void>(`/api/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+  });
+}
+
+// Hydrate a past session's full transcript by id. Used by the sidebar's "open past
+// session" interaction to replay messages into the chat panel.
+export async function fetchSessionMessages(
+  sessionId: string,
+): Promise<Message[]> {
+  const res = await apiFetch<{ messages: Message[] }>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/messages`,
+  );
+  return res.messages;
+}
+
+// Re-answer a past question. Returns the new answer + feedback rows; the original
+// row stays in the transcript so the user can compare attempts side by side.
+export async function reanswerQuestion(
+  sessionId: string,
+  questionIndex: number,
+  answer: string,
+): Promise<{ answerMsg: Message; feedback: Message }> {
+  return apiFetch(
+    `/api/sessions/${encodeURIComponent(sessionId)}/questions/${questionIndex}/reanswer`,
+    {
+      method: "POST",
+      body: JSON.stringify({ answer }),
+    },
+  );
+}
+
+// Dashboard summary — one round-trip returns headline stats, score trend, weak areas,
+// and a per-style practice breakdown. Used by the `/dashboard` page.
+export interface DashboardSummary {
+  stats: {
+    totalSessions: number;
+    totalQuestionsAnswered: number;
+    averageScore: number | null;
+    bestScore: number | null;
+  };
+  scoreTrend: Array<{ at: string; score: number }>;
+  weakAreas: Array<{ phrase: string; count: number }>;
+  // Optional so a stale BE that hasn't shipped this field yet doesn't break the FE —
+  // consumers fall back to a zeroed object when undefined.
+  styleBreakdown?: Record<"behavioral" | "technical" | "mixed", number>;
+}
+
+export async function fetchDashboardSummary(): Promise<DashboardSummary> {
+  return apiFetch<DashboardSummary>("/api/dashboard/summary");
+}
+
+/**
+ * Per-résumé bank — one entry per distinct résumé filename, with the full question
+ * history (every question ever asked of this résumé). Backs the dashboard's "My
+ * Résumés" panel and proves the "no repeated questions" claim concretely.
+ */
+export interface ResumeBankEntry {
+  resumeFileName: string;
+  resumeContent: string;
+  sessionCount: number;
+  questions: Array<{ content: string; createdAt: string; sessionId: string }>;
+  averageScore: number | null;
+  lastUsed: string;
+}
+
+export async function fetchResumeBank(): Promise<ResumeBankEntry[]> {
+  const res = await apiFetch<{ resumes: ResumeBankEntry[] }>(
+    "/api/dashboard/resumes",
+  );
+  return res.resumes;
 }

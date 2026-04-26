@@ -9,7 +9,7 @@
  *   4. For grading: pass the prompt's `responseSchema` as `response_format` so the model
  *      returns valid JSON, then `.parse()` the response so a malformed payload fails
  *      loudly instead of polluting the messages collection.
- *   5. Log token usage at INFO level so a future quota plug-in (Phase 2d) has the
+ *   5. Log token usage at INFO level so the per-user daily quota guard has the
  *      counters to consume.
  *
  * Construction strategy: caller passes the API key and model to the constructor. The

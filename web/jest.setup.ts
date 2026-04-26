@@ -36,6 +36,37 @@ Object.defineProperty(globalThis, "sessionStorage", {
   configurable: true,
 });
 
+// jsdom doesn't ship ResizeObserver; recharts (used by ScoreRadial) hard-requires it.
+// Minimal stub — noop methods are enough because we don't assert on chart geometry in
+// tests; we only care that the component renders without throwing.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+Object.defineProperty(globalThis, "ResizeObserver", {
+  value: ResizeObserverStub,
+  writable: true,
+  configurable: true,
+});
+
+// jsdom's matchMedia is undefined too; sonner (Toaster) probes it for reduced-motion
+// preference. Always-false stub so toasts behave normally in tests.
+Object.defineProperty(globalThis, "matchMedia", {
+  value: (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }),
+  writable: true,
+  configurable: true,
+});
+
 afterEach(() => {
   cleanup();
   localStorage.clear();

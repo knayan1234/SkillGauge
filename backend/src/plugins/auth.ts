@@ -1,5 +1,5 @@
 /**
- * JWT cookie session helpers + the `requireAuth` Fastify preHandler.
+ * JWT cookie session helpers + the `requireAuth` Express middleware.
  *
  * The session token is the only thing that proves identity on a request — the cookie is
  * just transport. Per-user `epoch` supports "log-out-everywhere" without rotating the
@@ -9,7 +9,7 @@
  * cookie transport, verify, cross-origin handshake, rotation).
  */
 
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "@/config/env";
 import { usersRepo } from "@/db/repos/users";
@@ -24,10 +24,13 @@ interface SessionPayload {
   epoch: number;
 }
 
-declare module "fastify" {
-  interface FastifyRequest {
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
     // Populated by requireAuth; absent on public routes.
-    userId?: string;
+    interface Request {
+      userId?: string;
+    }
   }
 }
 
@@ -44,28 +47,28 @@ export function signSessionToken(userId: string, epoch: number): string {
   );
 }
 
-export function setSessionCookie(reply: FastifyReply, token: string): void {
+export function setSessionCookie(res: Response, token: string): void {
   // httpOnly: blocks JS access (XSS mitigation — the upgrade from localStorage).
   // sameSite: "lax" is the sweet spot: blocks CSRF on state-changing cross-site requests
   //   while letting top-level navigation carry the cookie.
   // secure is only set in production — local dev uses http://localhost.
-  reply.setCookie(COOKIE_NAME, token, {
+  res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * env.JWT_TTL_DAYS,
+    maxAge: 60 * 60 * 24 * env.JWT_TTL_DAYS * 1000, // Express cookie maxAge is in ms
   });
 }
 
-export function clearSessionCookie(reply: FastifyReply): void {
-  reply.clearCookie(COOKIE_NAME, { path: "/" });
+export function clearSessionCookie(res: Response): void {
+  res.clearCookie(COOKIE_NAME, { path: "/" });
 }
 
 /**
- * Route-level guard. Use as `preHandler: requireAuth` on any handler that needs
- * `request.userId`. Three rejection paths, all returning 401 with a structured body so
- * the FE can branch:
+ * Route-level guard. Use as `router.use(requireAuth)` on a Router that needs
+ * `req.userId`, or pass it as a per-route middleware argument. Three rejection paths,
+ * all returning 401 with a structured body so the FE can branch:
  *   1. No cookie at all                -> NOT_AUTHENTICATED
  *   2. Cookie present but invalid      -> INVALID_SESSION
  *      (expired / tampered / wrong secret / epoch mismatch)
@@ -75,14 +78,15 @@ export function clearSessionCookie(reply: FastifyReply): void {
  * developers the detail when they grep their logs.
  */
 export async function requireAuth(
-  request: FastifyRequest,
-  reply: FastifyReply,
+  req: Request,
+  res: Response,
+  next: NextFunction,
 ): Promise<void> {
-  const token = request.cookies[COOKIE_NAME];
+  const token = req.cookies?.[COOKIE_NAME];
   if (!token) {
-    reply
-      .code(401)
-      .send({ code: "NOT_AUTHENTICATED", message: "Not authenticated" });
+    res
+      .status(401)
+      .json({ code: "NOT_AUTHENTICATED", message: "Not authenticated" });
     return;
   }
 
@@ -92,9 +96,9 @@ export async function requireAuth(
   } catch {
     // Any verification failure (expired, tampered, wrong secret) — reject without leaking
     // the precise reason. The epoch check is below; same "INVALID_SESSION" shape.
-    reply
-      .code(401)
-      .send({ code: "INVALID_SESSION", message: "Invalid session" });
+    res
+      .status(401)
+      .json({ code: "INVALID_SESSION", message: "Invalid session" });
     return;
   }
 
@@ -108,23 +112,19 @@ export async function requireAuth(
     // User deleted while their session was live — reject. Distinct from the /me handler's
     // "user no longer exists" path, which checks AFTER preHandler succeeds. Reaching here
     // means the JWT was valid AND signed by us, but the row is gone — treat as logged out.
-    reply
-      .code(401)
-      .send({ code: "INVALID_SESSION", message: "Invalid session" });
+    res
+      .status(401)
+      .json({ code: "INVALID_SESSION", message: "Invalid session" });
     return;
   }
   const userEpoch = user.jwtEpoch ?? 1;
   if (tokenEpoch < userEpoch) {
-    reply
-      .code(401)
-      .send({ code: "INVALID_SESSION", message: "Invalid session" });
+    res
+      .status(401)
+      .json({ code: "INVALID_SESSION", message: "Invalid session" });
     return;
   }
 
-  request.userId = payload.sub;
-}
-
-// No-op registration — keeps the plugin pattern available if we later add decorators.
-export async function authPlugin(_app: FastifyInstance): Promise<void> {
-  // Placeholder; auth state lives on FastifyRequest via module augmentation above.
+  req.userId = payload.sub;
+  next();
 }

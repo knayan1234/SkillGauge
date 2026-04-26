@@ -14,12 +14,16 @@
  *                            near-zero.
  */
 
-import type { FastifyInstance } from "fastify";
+import { Router, type Application } from "express";
 import { env } from "@/config/env";
 
-export async function healthRoutes(app: FastifyInstance): Promise<void> {
+export function healthRoutes(app: Application): void {
+  const router = Router();
+
   // Liveness only. Deeper checks (DB ping, LLM reachable) belong on a /ready sibling.
-  app.get("/api/health", async () => ({ status: "ok" }));
+  router.get("/", (_req, res) => {
+    res.json({ status: "ok" });
+  });
 
   // Exposes the active LLM provider so the FE can show a "🤖 stub" / "🤖 openai" /
   // "🤖 anthropic" badge in the interview header.
@@ -28,13 +32,16 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
   // populated from the matching per-provider env (`OPENAI_MODEL` / `ANTHROPIC_MODEL`)
   // when a real provider is active, so the badge auto-renders e.g.
   // "🤖 openai · gpt-4o-mini" the moment ops drops in a key.
-  app.get("/api/health/info", async () => {
+  router.get("/info", (_req, res) => {
     let llmModel: string | null = null;
     if (env.LLM_PROVIDER === "openai") llmModel = env.OPENAI_MODEL;
     else if (env.LLM_PROVIDER === "anthropic") llmModel = env.ANTHROPIC_MODEL;
-    return {
+    else if (env.LLM_PROVIDER === "gemini") llmModel = env.GEMINI_MODEL;
+    res.json({
       llmProvider: env.LLM_PROVIDER,
       llmModel,
-    };
+    });
   });
+
+  app.use("/api/health", router);
 }

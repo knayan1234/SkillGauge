@@ -30,7 +30,7 @@ const schema = z.object({
   // Mongo connection string. Tests override at runtime with mongodb-memory-server.
   MONGODB_URI: z.string().default("mongodb://127.0.0.1:27017"),
   MONGODB_DB: z.string().default("skillgauge"),
-  LLM_PROVIDER: z.enum(["stub", "openai", "anthropic"]).default("stub"),
+  LLM_PROVIDER: z.enum(["stub", "openai", "anthropic", "gemini"]).default("stub"),
   // Real-provider configuration. All optional at the schema level — the factory in
   // `src/llm/index.ts` enforces "key required when provider selects this adapter" with
   // a clear startup error so a missing key fails fast instead of silently falling back.
@@ -38,6 +38,21 @@ const schema = z.object({
   OPENAI_MODEL: z.string().default("gpt-4o-mini"),
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL: z.string().default("claude-sonnet-4-6"),
+  // Gemini — Google's free-tier-friendly option. 1M-token context window on 2.0 Flash;
+  // 15 RPM / 1500 RPD on the free tier as of 2026. The default model name is the
+  // current free Flash variant; bump as Google rotates the GA tag.
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default("gemini-2.0-flash"),
+  // Embeddings layer. Independent from LLM_PROVIDER because chat and embeddings are
+  // different endpoints with different cost / rate-limit profiles.
+  // Today: "stub" (deterministic hash-derived vectors — no key, no real semantic
+  // meaning, but the storage path runs end-to-end) or "gemini" (reuses GEMINI_API_KEY).
+  EMBEDDINGS_PROVIDER: z.enum(["stub", "gemini"]).default("stub"),
+  GEMINI_EMBED_MODEL: z.string().default("gemini-embedding-001"),
+  // Vector dimensionality. Must match the Atlas Search index spec — if a future
+  // provider returns a different dim, you must rebuild the index. 768 is the default
+  // for `gemini-embedding-001` and the stub.
+  EMBEDDINGS_DIMENSIONS: z.coerce.number().int().positive().default(768),
   // Per-call timeout for real LLM requests (ms). Default 30s — generous enough for hard
   // questions on slower models, tight enough that a stuck provider doesn't pin a request.
   LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
@@ -47,8 +62,11 @@ const schema = z.object({
   //   ~25 grading calls on gpt-4o-mini at typical question/answer lengths.
   // - MAX_INPUT_CHARS: hard cap on the total characters fed into a single LLM call.
   //   Defends against abusive payloads that would burn budget without producing signal.
+  //   Sized for a realistic prompt: ~10K résumé + ~5K JD + ~30K rolling question
+  //   history (round 4+) + ~5K rendered prompt scaffolding ≈ 50K. Gemini's 1M-token
+  //   context handles this trivially; OpenAI/Anthropic are fine too.
   DAILY_TOKEN_LIMIT: z.coerce.number().int().positive().default(100_000),
-  MAX_INPUT_CHARS: z.coerce.number().int().positive().default(10_000),
+  MAX_INPUT_CHARS: z.coerce.number().int().positive().default(60_000),
 });
 
 // Dev default keeps `npm run dev` working without a .env file. Production MUST set JWT_SECRET.

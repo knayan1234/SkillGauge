@@ -3,7 +3,10 @@ import { env } from "./config/env";
 
 async function main(): Promise<void> {
   const app = await buildApp();
-  await app.listen({ port: env.PORT, host: env.HOST });
+  app.listen(env.PORT, env.HOST, () => {
+    // eslint-disable-next-line no-console
+    console.log(`Server listening on http://${env.HOST}:${env.PORT}`);
+  });
 }
 
 main().catch((err: unknown) => {

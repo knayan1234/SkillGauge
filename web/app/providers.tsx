@@ -2,9 +2,29 @@
 
 import { type ReactNode, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { ThemeProvider } from "next-themes";
+import { ThemeProvider, useTheme } from "next-themes";
+import { Toaster } from "sonner";
 import { AuthModalProvider } from "@/components/AuthModalProvider";
 import { createQueryClient } from "@/lib/queryClient";
+
+// Bridges next-themes' resolved theme into sonner's `theme` prop so toasts honour
+// dark/light/system without a flash. Kept inline (not its own file) — it's a five-line
+// glue component with one consumer.
+function ThemedToaster() {
+  const { resolvedTheme } = useTheme();
+  return (
+    <Toaster
+      theme={resolvedTheme === "dark" ? "dark" : "light"}
+      richColors
+      closeButton
+      // Top-center keeps toasts away from the right-side header controls (sign in,
+      // theme toggle, dashboard link) and clear of any dialog footers that anchor
+      // their primary action on the right. Top is preferred over bottom because the
+      // chat input bar lives at the bottom of /interview.
+      position="top-center"
+    />
+  );
+}
 
 export function Providers({ children }: { children: ReactNode }) {
   // Lazy useState init keeps the QueryClient stable across re-renders (one client per mount).
@@ -23,6 +43,7 @@ export function Providers({ children }: { children: ReactNode }) {
     >
       <QueryClientProvider client={queryClient}>
         <AuthModalProvider>{children}</AuthModalProvider>
+        <ThemedToaster />
       </QueryClientProvider>
     </ThemeProvider>
   );

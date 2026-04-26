@@ -36,6 +36,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut, LogIn } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthModal } from "./AuthModalProvider";
@@ -54,6 +55,7 @@ export function UserMenu() {
     setIsSigningOut(true);
     try {
       await logout();
+      toast.success("Signed out");
       router.push("/");
     } finally {
       // Reset flag even on error — useAuth.logout already swallows logout errors so the

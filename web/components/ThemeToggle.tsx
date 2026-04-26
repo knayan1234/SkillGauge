@@ -1,16 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function ThemeToggle() {
-  // mounted gate keeps SSR HTML stable — next-themes only knows the resolved theme client-side.
-  const [mounted, setMounted] = useState(false);
-  const { resolvedTheme, setTheme } = useTheme();
+const SUBSCRIBE_NOOP = () => () => {};
 
-  useEffect(() => setMounted(true), []);
+export function ThemeToggle() {
+  // SSR stays "not mounted" so the HTML is stable; the client snapshot flips on first
+  // client render. Avoids the useEffect+setState mount-detection pattern that React's
+  // newer rules flag as an anti-pattern.
+  const mounted = useSyncExternalStore(
+    SUBSCRIBE_NOOP,
+    () => true,
+    () => false,
+  );
+  const { resolvedTheme, setTheme } = useTheme();
 
   const isDark = mounted && resolvedTheme === "dark";
 
@@ -23,9 +29,9 @@ export function ThemeToggle() {
       className="h-8 w-8 p-0"
     >
       {mounted && isDark ? (
-        <Sun className="h-4 w-4" />
+        <Sun className="h-4 w-4" aria-hidden="true" />
       ) : (
-        <Moon className="h-4 w-4" />
+        <Moon className="h-4 w-4" aria-hidden="true" />
       )}
     </Button>
   );

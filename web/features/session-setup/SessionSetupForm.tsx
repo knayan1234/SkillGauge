@@ -20,6 +20,7 @@ import { Upload } from "lucide-react";
 import {
   ACCEPTED_RESUME_ACCEPT_ATTR,
   INTERVIEW_STYLES,
+  INTERVIEWER_PERSONAS,
   DIFFICULTY_LEVELS,
   ROLE_LEVELS,
   QUESTION_COUNTS,
@@ -65,6 +66,7 @@ type PendingSubmit = {
   roleLevel: SessionSetupFormValues["roleLevel"];
   questionCount: SessionSetupFormValues["questionCount"];
   focusAreas?: string;
+  interviewerPersona: SessionSetupFormValues["interviewerPersona"];
 };
 
 // Mirror of SessionOptions stored alongside the resume snapshot so /interview can forward
@@ -87,6 +89,7 @@ function persistAndGo(data: PendingSubmit, router: { push: (p: string) => void }
       roleLevel: data.roleLevel,
       questionCount: data.questionCount,
       focusAreas: data.focusAreas,
+      interviewerPersona: data.interviewerPersona,
     }),
   );
   sessionStorage.setItem(STORAGE_KEYS.session.active, "true");
@@ -127,6 +130,7 @@ export function SessionSetupForm() {
       difficulty: "medium",
       roleLevel: "mid",
       questionCount: "5",
+      interviewerPersona: "neutral",
     },
   });
 
@@ -150,6 +154,7 @@ export function SessionSetupForm() {
       roleLevel: values.roleLevel,
       questionCount: values.questionCount,
       focusAreas: values.focusAreas || undefined,
+      interviewerPersona: values.interviewerPersona,
     };
     // Guard: if an interview is already in progress, warn before overwriting the handoff blob.
     const inProgress = sessionStorage.getItem(STORAGE_KEYS.session.active) === "true";
@@ -246,6 +251,25 @@ export function SessionSetupForm() {
               {QUESTION_COUNTS.map((n) => (
                 <option key={n} value={n}>
                   {n}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Persona selector — tilts the interviewer's tone and rubric.
+              `neutral` is the default and produces the unflavoured baseline prompt. */}
+          <div className="space-y-2">
+            <Label htmlFor="interviewerPersona">Interviewer persona</Label>
+            <select
+              id="interviewerPersona"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              {...register("interviewerPersona")}
+            >
+              {INTERVIEWER_PERSONAS.map((p) => (
+                <option key={p} value={p}>
+                  {p === "faang"
+                    ? "FAANG"
+                    : p[0].toUpperCase() + p.slice(1)}
                 </option>
               ))}
             </select>

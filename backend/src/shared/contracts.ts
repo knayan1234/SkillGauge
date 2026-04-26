@@ -66,11 +66,24 @@ export type ResetConfirm = z.infer<typeof resetConfirmSchema>;
 export const INTERVIEW_STYLES = ["behavioral", "technical", "mixed"] as const;
 export const DIFFICULTY_LEVELS = ["easy", "medium", "hard"] as const;
 export const ROLE_LEVELS = ["junior", "mid", "senior", "lead"] as const;
-export const QUESTION_COUNTS = [3, 5, 7, 10] as const;
+// Persona modes — let the user pick a flavour for the interviewer's tone and rubric.
+// `neutral` is the default and produces the unflavoured baseline prompt; the others
+// tilt the prompt in domain-specific directions (FAANG / startup / consulting).
+export const INTERVIEWER_PERSONAS = [
+  "neutral",
+  "faang",
+  "startup",
+  "consulting",
+] as const;
+// 25 is the canonical "per-round" question count for the round-chaining feature
+// (one session, growing transcript). Smaller counts remain supported for quick
+// practice runs.
+export const QUESTION_COUNTS = [3, 5, 7, 10, 25] as const;
 
 export type InterviewStyle = (typeof INTERVIEW_STYLES)[number];
 export type DifficultyLevel = (typeof DIFFICULTY_LEVELS)[number];
 export type RoleLevel = (typeof ROLE_LEVELS)[number];
+export type InterviewerPersona = (typeof INTERVIEWER_PERSONAS)[number];
 
 // Mirrors web/features/session-setup/sessionSetupSchema.ts for the *payload shape* (NOT
 // the file-validation rules — those stay on the FE because the BE never sees the raw
@@ -97,6 +110,9 @@ export const initSessionSchema = z.object({
       message: "Unsupported question count",
     }),
   focusAreas: z.string().trim().max(500).optional(),
+  // Optional persona; defaults to `neutral` at the service layer if omitted, so old
+  // FE clients without the field continue to work.
+  interviewerPersona: z.enum(INTERVIEWER_PERSONAS).optional(),
 });
 export type InitSessionPayload = z.infer<typeof initSessionSchema>;
 

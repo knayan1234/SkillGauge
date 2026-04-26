@@ -28,6 +28,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,6 +62,9 @@ export function PasswordResetForm({ token }: PasswordResetFormProps) {
     try {
       await confirmPasswordReset(token, newPassword);
       setIsComplete(true);
+      toast.success("Password updated", {
+        description: "All other sessions have been signed out for safety.",
+      });
       // Redirect after a short pause so the user sees the success state.
       setTimeout(() => router.push("/"), 1500);
     } catch (err) {

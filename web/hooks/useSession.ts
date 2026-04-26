@@ -8,6 +8,9 @@ import {
   type SessionInitRequest,
   initializeSession,
   submitAnswer,
+  startNextRound,
+  fetchSessionMessages,
+  listSessions,
 } from "@/services/api";
 
 interface SessionState {
@@ -20,6 +23,14 @@ interface UseSessionReturn extends SessionState {
   isLoading: boolean;
   initializeSession: (request: SessionInitRequest) => Promise<void>;
   submitUserAnswer: (answer: string) => Promise<void>;
+  startNextRound: () => Promise<void>;
+  /**
+   * Hydrate the hook with a past session pulled from the BE. Used when the user clicks a
+   * chatroom in the sidebar — we read the session metadata from /api/sessions and replay
+   * its full message transcript via /api/sessions/:id/messages. Returns an `ok` flag so
+   * the caller can surface a clear error toast if the fetch fails (BE down, 404, etc.).
+   */
+  loadFromServer: (sessionId: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
 export function useSession(): UseSessionReturn {
@@ -82,10 +93,85 @@ export function useSession(): UseSessionReturn {
     [answerMutation, state.session],
   );
 
+  // Round chaining (option B). When the user clicks "Start next round" on a completed
+  // session, we POST /sessions/:id/rounds/next; the BE bumps the round, extends
+  // totalQuestions, returns the first question of the new round. We append it to the
+  // existing transcript so the user keeps one growing chat — no remount, no scroll jump.
+  const nextRoundMutation = useMutation({
+    mutationFn: async () => {
+      if (!state.session) throw new Error("No active session");
+      return startNextRound(state.session.id);
+    },
+    onSuccess: ({ session, firstQuestion }) => {
+      setState((prev) => ({
+        // Replace the session shallowly so the new totalQuestions / currentRound flow
+        // through to the header + sidebar, but preserve the full message history.
+        session,
+        messages: [...prev.messages, firstQuestion],
+        isComplete: false,
+      }));
+    },
+  });
+
+  const startNextRoundCallback = useCallback(async () => {
+    if (!state.session) return;
+    await nextRoundMutation.mutateAsync().catch(() => undefined);
+  }, [nextRoundMutation, state.session]);
+
+  // Loading a past session from the BE. Two parallel calls — listSessions for the metadata
+  // (status, currentQuestionIndex, totalQuestions, etc.) and fetchSessionMessages for the
+  // transcript. We rely on listSessions because the BE doesn't have a single-session GET
+  // today, and the list is small + already cached by the sidebar so the call is usually
+  // a no-op fetch.
+  //
+  // onMutate clears local state immediately so navigating between chatrooms doesn't flash
+  // the previous session's transcript while the new one is in flight — the page renders
+  // the loading skeleton during the fetch instead.
+  const loadMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      const [sessions, messages] = await Promise.all([
+        listSessions(),
+        fetchSessionMessages(sessionId),
+      ]);
+      const meta = sessions.find((s) => s.id === sessionId);
+      if (!meta) throw new Error("Session not found");
+      return { meta, messages };
+    },
+    onMutate: () => {
+      setState({ session: null, messages: [], isComplete: false });
+    },
+    onSuccess: ({ meta, messages }) => {
+      setState({
+        session: meta,
+        messages,
+        isComplete: meta.status === "completed",
+      });
+    },
+  });
+
+  const loadFromServer = useCallback(
+    async (sessionId: string): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        await loadMutation.mutateAsync(sessionId);
+        return { ok: true };
+      } catch (err) {
+        const error = err instanceof Error ? err.message : "Failed to load session";
+        return { ok: false, error };
+      }
+    },
+    [loadMutation],
+  );
+
   return {
     ...state,
-    isLoading: initMutation.isPending || answerMutation.isPending,
+    isLoading:
+      initMutation.isPending ||
+      answerMutation.isPending ||
+      nextRoundMutation.isPending ||
+      loadMutation.isPending,
     initializeSession: initializeSessionCallback,
     submitUserAnswer,
+    startNextRound: startNextRoundCallback,
+    loadFromServer,
   };
 }

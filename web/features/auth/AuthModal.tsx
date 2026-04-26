@@ -34,6 +34,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,8 +95,23 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
         : await registerUser(email, password);
 
     if (result.success) {
+      // Modal closes on success, so a top-right toast is the only confirmation surface
+      // the user has between submit and the /setup redirect. Keep the inline error path
+      // for failures — inside the still-open modal, inline is more visible than a toast.
+      toast.success(
+        mode === "login" ? "Signed in" : "Account created",
+        {
+          description:
+            mode === "login"
+              ? "Welcome back — let's pick up where you left off."
+              : "Your interview prep workspace is ready.",
+        },
+      );
       onOpenChange(false);
-      router.push("/setup");
+      // Land on the authenticated workspace, not directly into setup. Returning users
+      // see their chat history sidebar + a "Start new session" CTA so they can pick
+      // up an old chatroom or begin a fresh one in a single click.
+      router.push("/sessions");
     } else {
       setSubmitError(result.error || "Authentication failed");
     }

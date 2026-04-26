@@ -16,11 +16,21 @@ export const MAX_RESUME_BYTES = 5 * 1024 * 1024;
 export const INTERVIEW_STYLES = ["behavioral", "technical", "mixed"] as const;
 export const DIFFICULTY_LEVELS = ["easy", "medium", "hard"] as const;
 export const ROLE_LEVELS = ["junior", "mid", "senior", "lead"] as const;
-export const QUESTION_COUNTS = [3, 5, 7, 10] as const;
+// Persona modes — tilts the interviewer's tone + rubric. `neutral` is the default
+// and produces the unflavoured baseline prompt.
+export const INTERVIEWER_PERSONAS = [
+  "neutral",
+  "faang",
+  "startup",
+  "consulting",
+] as const;
+// 25 is the canonical "per-round" count for the round-chaining flow. Smaller values
+// stay supported for quick warm-up runs.
+export const QUESTION_COUNTS = [3, 5, 7, 10, 25] as const;
 
-export type InterviewStyle = (typeof INTERVIEW_STYLES)[number];
-export type DifficultyLevel = (typeof DIFFICULTY_LEVELS)[number];
-export type RoleLevel = (typeof ROLE_LEVELS)[number];
+// `InterviewStyle`, `DifficultyLevel`, `RoleLevel`, and `InterviewerPersona` are the
+// canonical shape — but consumers import them from services/api.ts where they're
+// declared as part of the wire contract, so we don't re-export them here.
 export type QuestionCount = (typeof QUESTION_COUNTS)[number];
 
 // Duck-typed check instead of `instanceof FileList` — jsdom 29 lacks DataTransfer, so tests
@@ -65,6 +75,10 @@ export const sessionSetupSchema = z.object({
     .enum(QUESTION_COUNTS.map(String) as unknown as [string, ...string[]])
     .transform((v) => Number(v) as QuestionCount),
   focusAreas: z.string().trim().max(500).optional().or(z.literal("")),
+  // Persona is optional with a default — the dropdown is pre-selected to "neutral",
+  // so users who never touch it submit with the safe default and the backend keeps
+  // its pre-Phase-10 behaviour.
+  interviewerPersona: z.enum(INTERVIEWER_PERSONAS).default("neutral"),
 });
 
 // Input type (what RHF holds before submit) vs output type (post-transform values).

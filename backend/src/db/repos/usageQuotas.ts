@@ -12,7 +12,7 @@
  * Why a separate collection: putting a counter on `users` would unbound growth (the
  * field would never auto-clean) and would race against other user-doc updates. A
  * dedicated collection lets the TTL index do the cleanup and lets us shard / index
- * independently if Phase 4 ever needs hot-path quota lookups at scale.
+ * independently if a production deploy ever needs hot-path quota lookups at scale.
  */
 
 import { getDb } from "../connection";

@@ -56,13 +56,25 @@ export async function ensureIndexes(): Promise<void> {
 
   // usage_quotas:
   // - userId index supports per-user history queries (e.g., "show me all of Jane's
-  //   day-by-day usage for the last week"). Phase 3+ may use this for analytics.
+  //   day-by-day usage for the last week"). The dashboard aggregations may use this.
   // - expiresAt TTL auto-deletes quota docs 32 days after their day-of-record so the
   //   collection stays bounded with no background sweeper.
   await db.collection("usage_quotas").createIndex({ userId: 1 });
   await db
     .collection("usage_quotas")
     .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+  // memories (long-term memory + Atlas Vector Search):
+  // - (userId, createdAt) supports the dashboard / sidebar listing path.
+  // - sessionId index supports "show all memories for this session" queries.
+  //
+  // The vector-search index on `embedding` is NOT created here — Atlas Search indexes
+  // live outside the standard driver's createIndex API. Create it via Atlas UI / Admin
+  // API with the JSON spec documented in db/repos/memories.ts. Local mongods (without
+  // Atlas Search) won't have the vector index, and `searchSimilar()` calls will fail
+  // gracefully — the storage path still works.
+  await db.collection("memories").createIndex({ userId: 1, createdAt: -1 });
+  await db.collection("memories").createIndex({ sessionId: 1 });
 }
 
 // Allow `tsx src/db/indexes.ts` (or `node dist/db/indexes.js`) as a one-shot.

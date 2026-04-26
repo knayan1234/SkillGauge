@@ -5,3 +5,8 @@ dist/
 .env
 .env.local
 coverage/
+# Stale TS-compile artifacts in the tests folder. Real tests are .ts only;
+# jest reads them via testMatch. Ignoring prevents accidental commits if a
+# stray `tsc` run lands here.
+tests/**/*.js
+tests/**/*.js.map

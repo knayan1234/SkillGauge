@@ -58,13 +58,21 @@ export function useAuth(): UseAuthReturn {
     onSuccess: handleAuthSuccess,
   });
 
+  // We always tear down local auth state — both on success and on failure — so the user
+  // isn't stuck on an authenticated page if the network/BE is unreachable. The cookie is
+  // httpOnly, so the only thing the FE can observe is /api/me; flipping the cache to null
+  // is what flips the UI into "signed out" mode. If the server call failed, the cookie may
+  // still be live for a request or two until /api/me re-validates and finds it expired.
+  const tearDownAuthState = useCallback(() => {
+    queryClient.setQueryData(AUTH_QUERY_KEY, null);
+    // Drop all cached server state so the next user can't see the previous user's data.
+    queryClient.clear();
+  }, [queryClient]);
+
   const logoutMutation = useMutation({
     mutationFn: logoutUser,
-    onSuccess: () => {
-      queryClient.setQueryData(AUTH_QUERY_KEY, null);
-      // Drop all cached server state so the next user can't see the previous user's data.
-      queryClient.clear();
-    },
+    onSuccess: tearDownAuthState,
+    onError: tearDownAuthState,
   });
 
   const login = useCallback(
