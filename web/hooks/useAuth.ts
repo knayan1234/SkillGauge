@@ -28,8 +28,8 @@ const AUTH_QUERY_KEY = ["auth", "current-user"] as const;
 export function useAuth(): UseAuthReturn {
   const queryClient = useQueryClient();
 
-  // /me is the source of truth in Phase 1 — the cookie is httpOnly, so the FE can't
-  // peek at the token; it must ask the server "who am I?" on mount.
+  // /me is the source of truth — the cookie is httpOnly, so the FE can't peek at the
+  // token; it must ask the server "who am I?" on mount.
   const meQuery = useQuery<User | null>({
     queryKey: AUTH_QUERY_KEY,
     queryFn: fetchMe,

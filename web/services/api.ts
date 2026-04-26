@@ -1,4 +1,4 @@
-// Real HTTP client. Phase 1: talks to the Fastify backend over JSON with cookie auth.
+// Real HTTP client. Talks to the Fastify backend over JSON with cookie auth.
 // Swap target: whatever API_BASE points at (local dev → http://localhost:4000).
 // Signatures match ARCHITECTURE.md §13 contract.
 
@@ -9,7 +9,7 @@ export interface User {
 }
 
 export interface AuthResponse {
-  // Phase 1: the auth cookie is Set-Cookie'd by the server; no token field on the body.
+  // The auth cookie is Set-Cookie'd by the server; no token field on the body.
   user: User;
 }
 
@@ -68,8 +68,9 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
-    // Phase 1.5a: machine-readable error code from `/api/auth/*` (e.g. "EMAIL_TAKEN",
-    // "INVALID_CREDENTIALS"). Optional because routes outside auth haven't been migrated.
+    // Machine-readable error code from `/api/auth/*` and `/api/sessions/*` (e.g.
+    // "EMAIL_TAKEN", "INVALID_CREDENTIALS", "SESSION_FORBIDDEN"). Optional because
+    // some routes (legacy `/api/health` ok responses, third-party errors) don't carry it.
     public readonly code?: string,
   ) {
     super(message);
@@ -77,8 +78,8 @@ export class ApiError extends Error {
 }
 
 async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  // credentials: "include" is the whole reason we're on a httpOnly cookie in Phase 1 —
-  // the browser will attach skillgauge_session automatically on cross-origin calls to API_BASE.
+  // credentials: "include" is the whole reason we're on a httpOnly cookie — the browser
+  // attaches skillgauge_session automatically on cross-origin calls to API_BASE.
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
     headers: {
@@ -126,7 +127,7 @@ export async function logoutUser(): Promise<void> {
   await apiFetch<void>("/api/auth/logout", { method: "POST" });
 }
 
-// Phase 1.5b — password reset flow.
+// Password reset flow.
 // Request: opaque 200 even if the email isn't registered. Caller must NOT branch on
 // "did the email exist" — we deliberately don't expose that signal.
 export async function requestPasswordReset(email: string): Promise<void> {
@@ -146,6 +147,21 @@ export async function confirmPasswordReset(
     method: "POST",
     body: JSON.stringify({ token, newPassword }),
   });
+}
+
+// Public health/info endpoint exposing the active LLM provider + model. Used by the
+// LlmBadge in the interview header. No auth, no PII; cached client-side with
+// staleTime: Infinity since the value rarely changes (only when ops swap LLM_PROVIDER
+// in env and restart the server — a deploy event the user isn't expected to see live).
+export interface HealthInfo {
+  llmProvider: "stub" | "openai" | "anthropic";
+  // Populated with the model name (e.g. "gpt-4o-mini") when a real provider is
+  // configured; null when LLM_PROVIDER=stub.
+  llmModel: string | null;
+}
+
+export async function fetchHealthInfo(): Promise<HealthInfo> {
+  return apiFetch<HealthInfo>("/api/health/info");
 }
 
 // Returns null on 401 so the query-cache can store "unauthenticated" as a real state

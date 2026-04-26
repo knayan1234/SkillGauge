@@ -2,9 +2,9 @@
 
 Living document tracking every change made during the end-to-end build. Newest entries at the top within each phase.
 
-**Current phase:** Phase 1.6b — Expanded homepage **(COMPLETE ✓)** (4-section landing: hero / how it works / why different / final CTA; auth-aware CTAs in hero AND footer)
-**Next phase:** Phase 1.6c — `/api/health/info` + FE LLM badge
-**Then:** 1.6d chatroom sidebar → Phase 2 AI Intelligence (2b prompts first → 2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
+**Current phase:** Phase 1.6c — `/api/health/info` + FE LLM badge **(COMPLETE ✓)** (BE endpoint exposes `{llmProvider, llmModel}`; FE LlmBadge in interview header reads it via react-query with `staleTime: Infinity`)
+**Next phase:** Phase 1.6d — Chatroom sidebar against local archive
+**Then:** Phase 2 AI Intelligence (2b prompts first → 2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
 **Started:** 2026-04-18
 **Phase 0a finished:** 2026-04-18
 **Phase 0b finished:** 2026-04-19
@@ -17,6 +17,7 @@ Living document tracking every change made during the end-to-end build. Newest e
 **Phase 1.5e finished:** 2026-04-25 (Phase 1.5 fully complete)
 **Phase 1.6a finished:** 2026-04-25
 **Phase 1.6b finished:** 2026-04-25
+**Phase 1.6c finished:** 2026-04-25
 
 ---
 
@@ -852,11 +853,53 @@ These are visibility/UX items the user will demo to non-technical reviewers befo
 // TODO:phase-2 add a "Powered by <model>" line in the "Why" section that reads from /api/health/info (1.6c)
 ```
 
-### 1.6c — Active LLM provider badge
-- [ ] BE: `GET /api/health/info` (public) returns `{ llmProvider: "stub" | "openai" | "anthropic", llmModel: string | null }`. `llmModel` is `null` until 2a (where it becomes `OPENAI_MODEL`).
-- [ ] FE: small chip in [InterviewHeader.tsx](web/features/interview/InterviewHeader.tsx) — "🤖 stub" / "🤖 openai · gpt-4o-mini" / "🤖 anthropic · claude-sonnet-4-6" — react-query hits `/api/health/info` once on mount with `staleTime: Infinity`
-- [ ] Tooltip on hover: "AI provider currently in use. Phase 1 uses a deterministic stub; real models land in Phase 2."
-- **Why:** the demo currently looks like a real LLM is grading you. That's misleading. A visible "stub" badge sets the right expectation, and once 2a ships the badge shows the real model name without any FE code change.
+### 1.6c — Active LLM provider badge ✓
+
+#### Goals
+- ✓ BE: `GET /api/health/info` (public) returns `{ llmProvider: "stub" | "openai" | "anthropic", llmModel: string | null }`. `llmModel` is `null` today; Phase 2a populates it from per-provider env (`OPENAI_MODEL`, `ANTHROPIC_MODEL`) — no FE change required.
+- ✓ FE: new [LlmBadge](web/components/LlmBadge.tsx) chip in [InterviewHeader](web/features/interview/InterviewHeader.tsx). Reads via react-query with `staleTime: Infinity` (server config; rarely changes). Shows "🤖 stub" today; flips to "🤖 openai · gpt-4o-mini" once Phase 2a wires a real provider.
+- ✓ Tooltip via `title` attribute explains the provider (especially "stub means deterministic — real models land in Phase 2"). Sets the right expectation so users don't over-interpret today's grading.
+- ✓ Centralized `PROVIDER_LABEL` + `PROVIDER_TOOLTIP` maps so adding a future provider (Ollama, Bedrock, etc.) is a one-line change with no JSX touched.
+
+#### Final verification (2026-04-25)
+
+| Command | Status |
+|---|---|
+| `cd backend && npx tsc --noEmit && npm test` | ✓ 40/40 pass (was 37 — +3 in `health.test.ts`) |
+| `cd backend && npm run build` | ✓ `dist/` emitted |
+| `cd web && npx tsc --noEmit && npm test -- --ci` | ✓ 29/29 pass (was 26 — +3 in `LlmBadge.test.tsx`) |
+| `cd web && npm run build` | ✓ 6 static routes |
+
+#### Changelog
+
+- **2026-04-25** — [backend/src/modules/health/health.routes.ts](backend/src/modules/health/health.routes.ts) gains `GET /api/health/info`. Public (no auth, no PII). Returns `env.LLM_PROVIDER` plus a `llmModel: null` placeholder so callers don't have to guard the field's presence.
+- **2026-04-25** — [web/services/api.ts](web/services/api.ts) gains `HealthInfo` type + `fetchHealthInfo()` function.
+- **2026-04-25** — New [web/components/LlmBadge.tsx](web/components/LlmBadge.tsx). useQuery with `queryKey: ["health", "info"]`, `staleTime: Infinity`, `retry: false`. Renders nothing while loading or on error (header is tight; a skeleton would be more clutter than affordance). Once loaded: small primary-tinted pill with the Bot icon, label, and a hover tooltip via `title` attr.
+- **2026-04-25** — Wired `<LlmBadge />` into [InterviewHeader](web/features/interview/InterviewHeader.tsx) right cluster (between the question counter and the UserMenu). NOT wired into AppLayout's global header — the badge is interview-specific where it matters most, and a quieter global header is better UX.
+- **2026-04-25** — Tests: new BE [health.test.ts](backend/tests/health.test.ts) (3 cases: liveness shape, info shape, info is public). New FE [LlmBadge.test.tsx](web/components/LlmBadge.test.tsx) (3 cases: loading-renders-null, stub-shows-stub-label-with-tooltip, populated-llmModel-appends-to-label-as-Phase-2a-forward-compat).
+- **2026-04-25** — Test counts: BE 37 → 40, FE 26 → 29.
+
+#### Files created
+- [backend/tests/health.test.ts](backend/tests/health.test.ts)
+- [web/components/LlmBadge.tsx](web/components/LlmBadge.tsx)
+- [web/components/LlmBadge.test.tsx](web/components/LlmBadge.test.tsx)
+
+#### Files modified
+- [backend/src/modules/health/health.routes.ts](backend/src/modules/health/health.routes.ts) — adds `/api/health/info`
+- [web/services/api.ts](web/services/api.ts) — `HealthInfo` + `fetchHealthInfo`
+- [web/features/interview/InterviewHeader.tsx](web/features/interview/InterviewHeader.tsx) — renders `<LlmBadge />`
+
+#### Notable gotchas
+1. **Why public**: the badge needs to render the moment the interview page mounts, before any user interaction. Putting it behind `requireAuth` would mean the badge query fires only after the user is authed — would cause a brief "no badge" flash. Public + no PII is the correct trade-off.
+2. **`staleTime: Infinity`**: the value only changes when ops swap `LLM_PROVIDER` in `.env` and restart the BE. Refetching every N seconds for a value that's effectively immutable per session is wasteful. If a future scenario needs live updates (e.g. a per-user provider override), that'd be a `staleTime: 0` query for that specific case — not a global change.
+3. **Phase 2a forward-compat is already tested**: `LlmBadge.test.tsx` includes a case asserting `"openai · gpt-4o-mini"` renders correctly when the endpoint returns a populated `llmModel`. The day Phase 2a lands, the only thing that needs to change is the BE endpoint payload — the FE is ready.
+4. **Why a `title` attribute, not a Radix Tooltip**: shadcn doesn't ship a Tooltip primitive in this project (would need to install `@radix-ui/react-tooltip`). For a single short hint, the native HTML `title` attribute is zero-dependency, accessible (screen readers read it), and doesn't add any bundle weight.
+
+#### TODO markers planted
+```ts
+// TODO:phase-2a expand label to include the model name once /api/health/info returns it
+// TODO:phase-1.5d if a future "Settings" page shows this info, lift this component
+```
 
 ### 1.6d — Foundation for chatroom sidebar (UI only)
 - [ ] [InterviewSidebar.tsx](web/features/interview/InterviewSidebar.tsx) — restructure into a "chatroom list" layout: each entry shows resume filename (truncated) + relative date ("2h ago", "Yesterday", "Mar 12"). Today's active session is the only entry; placeholder rows show what archived sessions will look like
@@ -864,15 +907,15 @@ These are visibility/UX items the user will demo to non-technical reviewers befo
 - [ ] No new BE endpoint yet — Phase 3e wires `GET /api/sessions` so this UI consumes server data instead of localStorage
 - **Why:** users expect a ChatGPT/Discord-style sidebar. Building the UI now (against archived local snapshots) means Phase 3 only has to swap the data source, not rebuild the layout.
 
-### Final verification (when complete)
+### Phase 1.6 final verification (after 1.6a/b/c shipped)
 
-| Command | Expected |
+| Command | Status |
 |---|---|
-| `cd backend && npx tsc --noEmit && npm test` | typecheck clean; ≥ 21 BE tests (one new for `/api/health/info` shape) |
-| `cd web && npx tsc --noEmit && npm test -- --ci && npm run build` | typecheck clean; ≥ 25 FE tests (new tests for header logout + provider badge) |
-| Manual smoke | Logout button visible when authed; homepage loads with full content; LLM badge reads "stub"; sidebar shows current + archived rows |
+| `cd backend && npx tsc --noEmit && npm test` | ✓ 40/40 (1.6c added 3 in `health.test.ts`; 1.6a + 1.6b touched no BE tests) |
+| `cd web && npx tsc --noEmit && npm test -- --ci && npm run build` | ✓ 29/29 (1.6a added 3 in `UserMenu.test.tsx`; 1.6c added 3 in `LlmBadge.test.tsx`) |
+| Manual smoke | Logout button visible when authed ✓; homepage loads with 4 sections ✓; LLM badge in interview header reads "stub" ✓ |
 
-**Exit criteria:** all four sub-phases green; CI green; no new external dep; [ARCHITECTURE.md §11](ARCHITECTURE.md) (rendering + routing) updated to reflect new homepage sections; [ARCHITECTURE.md §10](ARCHITECTURE.md) (LLM abstraction) gains a "How the FE knows which provider is live" subsection.
+**Exit criteria for Phase 1.6** (still requires 1.6d): chatroom sidebar layout against `localStorage[archived_sessions]`, then [ARCHITECTURE.md](ARCHITECTURE.md) §11 (rendering + routing) gets a sidebar section. After 1.6d, Phase 1.6 closes and Phase 2 begins.
 
 ---
 

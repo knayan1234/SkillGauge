@@ -5,8 +5,8 @@
  *
  * Hosts:
  *   - Brand mark (left): clickable, routes to `/`.
- *   - UserMenu (right): Phase 1.6a — auth-aware Sign in / Sign out affordance backed by
- *     the global AuthModalProvider so any route can trigger sign-in without prop drilling.
+ *   - UserMenu (right): auth-aware Sign in / Sign out affordance backed by the global
+ *     AuthModalProvider so any route can trigger sign-in without prop drilling.
  *   - ThemeToggle (right): light/dark/system via next-themes.
  *
  * The InterviewHeader (separate file) replicates the right-side cluster so the interview

@@ -165,7 +165,7 @@ export const sessionsService = {
   },
 
   // Returns the user's answer (echoed), the feedback message, and the next question (or null if done).
-  // Grouped so the FE does one round-trip per answer — mirrors Phase 0b's atomic state transition.
+  // Grouped so the FE does one round-trip per answer and applies state changes atomically.
   async submitAnswer(
     userId: string,
     sessionId: string,

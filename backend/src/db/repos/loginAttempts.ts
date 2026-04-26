@@ -1,5 +1,5 @@
 /**
- * Persistence for failed-login records, used by the per-email lockout in Phase 1.5c.
+ * Persistence for failed-login records, used by the per-email lockout.
  *
  * Why a separate collection (rather than a column on `users`)?
  *   1. We want lockout to happen even for unknown emails — otherwise an attacker can
@@ -9,8 +9,8 @@
  *      uses a TTL index so each failure auto-deletes after the lockout window expires.
  *
  * Hashed email (16 hex chars from `hashEmailForLog`) — never the raw email. Same hashing
- * function as the failed-login audit log so 1.5c's count and 1.5a's log lines are directly
- * correlatable in a debug session.
+ * function as the failed-login audit log so the lockout count and the audit log lines are
+ * directly correlatable in a debug session.
  */
 
 import { getDb } from "../connection";

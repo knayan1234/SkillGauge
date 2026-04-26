@@ -11,8 +11,8 @@
  * "trim+lowercase+email" shape pattern. Splitting would just add an import; co-locating
  * keeps the feature's data contract scannable in one read.
  *
- * TODO:phase-1.5e move these into backend/src/shared/contracts.ts when 1.5e lifts ALL
- * shared schemas, with the FE re-importing the inferred types from there.
+ * TODO: lift these into a shared module so the FE can re-import the inferred types
+ * directly from the BE contract.
  */
 
 import { z } from "zod";

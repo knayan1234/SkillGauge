@@ -2,9 +2,8 @@
  * JWT cookie session helpers + the `requireAuth` Fastify preHandler.
  *
  * The session token is the only thing that proves identity on a request — the cookie is
- * just transport. Phase 1 set up the basic sign + verify; Phase 1.5a moved TTL to env and
- * tightened cookie flags; Phase 1.5d added per-user `epoch` to support
- * "log-out-everywhere" without rotating the global JWT_SECRET.
+ * just transport. Per-user `epoch` supports "log-out-everywhere" without rotating the
+ * global JWT_SECRET.
  *
  * See ARCHITECTURE.md §9.1 for the full lifecycle walkthrough (token anatomy, sign,
  * cookie transport, verify, cross-origin handshake, rotation).
@@ -18,8 +17,8 @@ import { usersRepo } from "@/db/repos/users";
 export const COOKIE_NAME = "skillgauge_session";
 
 // What we encode in the JWT payload. `sub` is the user UUID — that's all we need to
-// resolve the user. `epoch` is the user's `jwtEpoch` at sign-time (Phase 1.5d). On verify
-// we compare `payload.epoch` against the user's current `jwtEpoch` — older tokens lose.
+// resolve the user. `epoch` is the user's `jwtEpoch` at sign-time. On verify we compare
+// `payload.epoch` against the user's current `jwtEpoch` — older tokens lose.
 interface SessionPayload {
   sub: string;
   epoch: number;
@@ -46,7 +45,7 @@ export function signSessionToken(userId: string, epoch: number): string {
 }
 
 export function setSessionCookie(reply: FastifyReply, token: string): void {
-  // httpOnly: blocks JS access (XSS mitigation — the Phase 1 upgrade from localStorage).
+  // httpOnly: blocks JS access (XSS mitigation — the upgrade from localStorage).
   // sameSite: "lax" is the sweet spot: blocks CSRF on state-changing cross-site requests
   //   while letting top-level navigation carry the cookie.
   // secure is only set in production — local dev uses http://localhost.
@@ -92,17 +91,17 @@ export async function requireAuth(
     payload = jwt.verify(token, env.JWT_SECRET) as SessionPayload;
   } catch {
     // Any verification failure (expired, tampered, wrong secret) — reject without leaking
-    // the precise reason. 1.5d's epoch check is below; same "INVALID_SESSION" shape.
+    // the precise reason. The epoch check is below; same "INVALID_SESSION" shape.
     reply
       .code(401)
       .send({ code: "INVALID_SESSION", message: "Invalid session" });
     return;
   }
 
-  // Phase 1.5d epoch check: the user may have rotated their epoch (logout-all, password
-  // reset). If so, even a cryptographically-valid token is dead.
-  // We tolerate `payload.epoch` being undefined (for tokens signed pre-1.5d) by treating
-  // it as 1 — the initial epoch. Once the first bump happens, those legacy tokens fail.
+  // Epoch check: the user may have rotated their epoch (logout-all, password reset).
+  // If so, even a cryptographically-valid token is dead.
+  // We tolerate `payload.epoch` being undefined (for legacy tokens) by treating it as 1
+  // — the initial epoch. Once the first bump happens, those legacy tokens fail.
   const tokenEpoch = payload.epoch ?? 1;
   const user = await usersRepo.findById(payload.sub);
   if (!user) {

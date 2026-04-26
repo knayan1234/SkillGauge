@@ -3,10 +3,8 @@
 /**
  * Landing page (`/`) — multi-section marketing layout.
  *
- * Phase 1.6b expansion: this page used to be just a single hero with three small cards.
- * Now it's a four-section landing tailored to walk a first-time visitor from
- * "what is this?" → "how does it work?" → "why should I use it over generic prep tools?"
- * → "let me try."
+ * A four-section landing tailored to walk a first-time visitor from "what is this?" →
+ * "how does it work?" → "why should I use it over generic prep tools?" → "let me try."
  *
  * Sections (top to bottom):
  *   1. Hero — brand mark, tagline, primary CTA. Auth-aware: anonymous → opens AuthModal,
@@ -25,16 +23,16 @@
  *   - All animations use existing Tailwind classes (`animate-slide-up`, `animate-float`,
  *     `animate-pulse-glow`) so we don't grow the CSS surface.
  *
- * Auth-aware CTAs (from Phase 1.6a):
+ * Auth-aware CTAs:
  *   - Anonymous → openAuthModal() — global modal hosted by AuthModalProvider.
  *   - Authenticated → router.push("/setup") — skip the redundant modal step for
  *     returning users.
  *   - isLoading → button disabled — avoids wrong-branch click before /me resolves.
  *
- * TODO:phase-4 add real product screenshots in the "How it works" cards (today they're
- * just icons + descriptive text). Object storage will host the images.
- * TODO:phase-2 once a real LLM is wired, the "Why" section gains a "Powered by <model>"
- * line that reads from the same /api/health/info endpoint as the badge in Phase 1.6c.
+ * TODO: add real product screenshots in the "How it works" cards (today they're just
+ * icons + descriptive text). Object storage will host the images.
+ * TODO: once a real LLM is wired, the "Why" section gains a "Powered by <model>" line
+ * that reads from the same /api/health/info endpoint as the badge in the header.
  */
 
 import { useRouter } from "next/navigation";

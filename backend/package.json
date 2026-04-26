@@ -2,7 +2,7 @@
   "name": "skillgauge-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "SkillGauge backend API (Phase 1: real HTTP + MongoDB + stubbed LLM)",
+  "description": "SkillGauge backend API (Fastify + MongoDB; pluggable LLM behind a stub-by-default interface)",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

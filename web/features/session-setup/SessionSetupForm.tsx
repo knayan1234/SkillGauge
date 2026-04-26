@@ -29,8 +29,9 @@ import {
 } from "./sessionSetupSchema";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 
-// Reading a file as text is enough for Phase 1's stubbed LLM (no parsing needed).
-// Phase 4 will move this to a multipart upload endpoint that stores the binary server-side.
+// Reading a file as text is enough for the current stubbed LLM (no parsing needed).
+// A future iteration will move this to a multipart upload endpoint that stores the
+// binary server-side.
 async function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -278,7 +279,7 @@ export function SessionSetupForm() {
             <DialogDescription>
               You have an interview in progress. Starting a new session will
               archive the current one locally — you won&apos;t be able to return
-              to it until the session history view ships in Phase 3.
+              to it until the session history view ships.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

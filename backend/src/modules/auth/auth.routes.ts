@@ -19,7 +19,7 @@ import {
   passwordResetService,
 } from "./password.service";
 
-// Phase 1.5c — rate-limit config object shared by routes that need per-IP throttling.
+// Rate-limit config object shared by routes that need per-IP throttling.
 // We declare it once so login + reset-request share identical policy and a future
 // auditor can grep for `RATE_LIMIT_AUTH` to find every protected route.
 const RATE_LIMIT_AUTH = {
@@ -54,7 +54,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const parsed = credentialsSchema.safeParse(request.body);
     if (!parsed.success) {
       // Try to surface a hashed correlator even on malformed payloads when an email-like
-      // string is present. This lets 1.5c rate-limit by emailHash without parsing the body again.
+      // string is present. This lets us rate-limit by emailHash without parsing the body again.
       const rawEmail =
         typeof (request.body as { email?: unknown } | null)?.email === "string"
           ? ((request.body as { email: string }).email)
@@ -83,9 +83,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       return reply.send({ user });
     } catch (err) {
       if (err instanceof AuthError) {
-        // Audit log: hashed email + IP + reason. Never the raw email or password. Phase 1.5c
-        // counts these (via the login_attempts collection, written by authService.login)
-        // for the per-email lockout decision.
+        // Audit log: hashed email + IP + reason. Never the raw email or password. These
+        // counts (via the login_attempts collection, written by authService.login) drive
+        // the per-email lockout decision.
         request.log.warn(
           {
             event: "auth.login.failed",
@@ -110,16 +110,16 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(204).send();
   });
 
-  // Phase 1.5d — log-out-everywhere. Bumps the user's `jwtEpoch`, which makes EVERY
-  // existing token signed for this user fail the requireAuth check on the next request
-  // (their `epoch` < new `jwtEpoch`). Then we clear the *current* request's cookie so
-  // the FE doesn't keep trying with a now-dead token.
+  // Log-out-everywhere. Bumps the user's `jwtEpoch`, which makes EVERY existing token
+  // signed for this user fail the requireAuth check on the next request (their `epoch` <
+  // new `jwtEpoch`). Then we clear the *current* request's cookie so the FE doesn't keep
+  // trying with a now-dead token.
   //
   // Requires auth — caller must already be holding a valid session to bump their own
   // epoch. There's no "bump someone else's epoch" path; that would be admin-only and is
-  // not in scope before Phase 4.
+  // out of scope.
   //
-  // TODO:phase-1.6 expose a "Sign out everywhere" button in a settings UI that calls this.
+  // TODO: expose a "Sign out everywhere" button in a settings UI that calls this.
   app.post(
     "/api/auth/logout-all",
     { preHandler: requireAuth },
@@ -130,13 +130,13 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  // --- Password reset (Phase 1.5b) ---------------------------------------------------
+  // --- Password reset ----------------------------------------------------------------
   // Two-step flow:
   //   1) request — opaque 200; never reveals whether the email exists. If it does, a
   //      single-use TTL'd token is generated and (in dev) logged to stdout.
   //   2) confirm — consumes the token, bcrypts the new password, marks token used.
-  // Both routes are public (no requireAuth). 1.5c will add per-IP/per-email rate limits.
-  // TODO:phase-4 swap the dev-mode stdout sink for transactional mail.
+  // Both routes are public (no requireAuth). Per-IP rate limit is wired below.
+  // TODO: swap the dev-mode stdout sink for transactional mail in production.
 
   app.post(
     "/api/auth/password/reset-request",
@@ -150,7 +150,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
     const result = await passwordResetService.requestReset(parsed.data.email);
     if (result.link) {
-      // Dev-only stdout sink. Production (Phase 4) sends mail via a provider.
+      // Dev-only stdout sink. Production sends mail via a provider.
       // Logging the link at INFO so it's visible in the dev terminal but not warn-level
       // noise in CI/prod log shipping.
       request.log.info(

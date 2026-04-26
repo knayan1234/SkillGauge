@@ -2,9 +2,10 @@
 
 Living architecture reference. **Update this file in the same commit as any structural change** (new module, new route, new service, phase transition).
 
-**Current phase:** Phase 1.1 complete (UX enhancements: dark mode, rich setup inputs, resume-per-session guard). Next up: Phase 1.5 — Auth hardening (starts with JWT login polish), then Phase 2 sub-parted into 2a → 2e.
-**Last updated:** 2026-04-20
+**Current phase:** Phase 1.6c complete — `/api/health/info` + FE `LlmBadge` shipped. Phase 1.5 (auth hardening, all five sub-phases) finished 2026-04-25; Phase 1.6 (UI polish) is 3/4 sub-phases done with 1.6d (chatroom sidebar) pending. Next major milestone is Phase 2 (real LLM behind `LLMClient`).
+**Last updated:** 2026-04-25
 **Scope of this doc:** Full stack — FE (Next.js) in [web/](web/) and BE (Fastify + MongoDB) in [backend/](backend/). The AI layer is a deterministic stub behind the `LLMClient` interface; swapping to a real provider is Phase 2.
+**Test baseline:** 40 BE + 29 FE = 69 Jest tests, all green. CI runs both suites in parallel.
 
 ---
 

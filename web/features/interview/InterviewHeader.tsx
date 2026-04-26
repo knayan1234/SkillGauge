@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LlmBadge } from "@/components/LlmBadge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserMenu } from "@/components/UserMenu";
 import {
@@ -53,8 +54,11 @@ export function InterviewHeader({
         <div className="text-xs text-muted-foreground">
           Question {currentQuestion + 1} of {totalQuestions}
         </div>
-        {/* Phase 1.6a — auth-aware UserMenu also lives in the interview shell so Sign
-            out is reachable without leaving the interview view. */}
+        {/* Visible LLM provider badge so users know whether they're being graded by a
+            real model or by today's deterministic stub. */}
+        <LlmBadge />
+        {/* Auth-aware UserMenu also lives in the interview shell so Sign out is
+            reachable without leaving the interview view. */}
         <UserMenu />
         <ThemeToggle />
         <Button

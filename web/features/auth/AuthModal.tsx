@@ -24,10 +24,10 @@
  * The mode switcher is at the bottom of each form view. switchToForgot/switchToLogin/
  * switchToRegister all reset both forms and the error state to avoid stale UI artifacts.
  *
- * TODO:phase-1.6 wire useAuth's logout into the user menu in AppLayout (this modal
- * doesn't need a logout entry — it's only shown when the user is signed-out).
- * TODO:phase-4 strip the demo defaults (demo@skillgauge.ai / password123) before public
- * deploy — they're a Phase 0 convenience for local evaluation only.
+ * TODO: wire useAuth's logout into the user menu in AppLayout (this modal doesn't need
+ * a logout entry — it's only shown when the user is signed-out).
+ * TODO: strip the demo defaults (demo@skillgauge.ai / password123) before public deploy
+ * — they're a local-evaluation convenience only.
  */
 
 import { useState } from "react";
@@ -73,8 +73,8 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
   const authForm = useForm<AuthFormValues>({
     resolver: zodResolver(authSchema),
-    // Phase 0 demo creds prefilled for easy evaluation.
-    // TODO:phase-4 remove the demo defaults before public deploy.
+    // Demo creds prefilled for easy evaluation.
+    // TODO: remove the demo defaults before public deploy.
     defaultValues: {
       email: "demo@skillgauge.ai",
       password: "password123",

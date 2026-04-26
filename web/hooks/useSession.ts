@@ -29,7 +29,7 @@ export function useSession(): UseSessionReturn {
     isComplete: false,
   });
 
-  // Phase 1: backend returns {session, firstQuestion} in one call — no chaining on the FE.
+  // Backend returns {session, firstQuestion} in one call — no chaining on the FE.
   const initMutation = useMutation({
     mutationFn: (request: SessionInitRequest) => initializeSession(request),
     onSuccess: ({ session, firstQuestion }) => {
@@ -41,7 +41,7 @@ export function useSession(): UseSessionReturn {
     },
   });
 
-  // Phase 1: backend returns {answerMsg, feedback, nextQuestion, isComplete} atomically.
+  // Backend returns {answerMsg, feedback, nextQuestion, isComplete} atomically.
   // Single setState append prevents the user seeing feedback without the next question behind it.
   const answerMutation = useMutation({
     mutationFn: async (answer: string) => {

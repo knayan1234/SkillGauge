@@ -1,5 +1,5 @@
 /**
- * Phase 1.5c — auth rate limit + lockout tests.
+ * Auth rate limit + lockout tests.
  *
  * Two layers of defense exercised here:
  *   1. Per-email soft lockout (Mongo-backed `login_attempts` collection):

@@ -3,21 +3,21 @@
 /**
  * Global host for the AuthModal so any descendant can open it via `useAuthModal().open()`.
  *
- * Phase 1.6a refactor:
- * Before — every page that needed sign-in (landing page only, in Phase 1) hosted its own
- * `useState + <AuthModal>` pair. Adding a "Sign in" button to the persistent header would
- * have meant either prop-drilling the toggle through AppLayout → UserMenu, or rendering a
- * second AuthModal instance.
- * After — a single provider owns the modal state. Any component (UserMenu, landing page
- * "Get started" button, future settings page) calls `useAuthModal().open()` and the
- * single shared modal opens. Eliminates state duplication and prop-drilling.
+ * Why a provider:
+ * Without it, every page that needed sign-in would host its own `useState + <AuthModal>`
+ * pair. Adding a "Sign in" button to the persistent header would have meant either
+ * prop-drilling the toggle through AppLayout → UserMenu, or rendering a second AuthModal
+ * instance. With the provider, a single owner holds the modal state. Any component
+ * (UserMenu, landing page "Get started" button, future settings page) calls
+ * `useAuthModal().open()` and the single shared modal opens. Eliminates state duplication
+ * and prop-drilling.
  *
  * Position in the tree: must sit INSIDE QueryClientProvider (the AuthModal calls useAuth
  * which calls useQuery) and ThemeProvider (so the modal styles match theme). Wired in
  * `app/providers.tsx`.
  *
- * TODO:phase-1.6c add a similar provider for any future global toast / notification
- * surface so we don't proliferate context providers per concern.
+ * TODO: add a similar provider for any future global toast / notification surface so we
+ * don't proliferate context providers per concern.
  */
 
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";

@@ -41,7 +41,7 @@ describe("auth routes", () => {
     expect(body.user.email).toBe("alice@example.com");
     expect(body.user.id).toBeDefined();
     const setCookie = res.headers["set-cookie"] as string;
-    // Cookie surface required by Phase 1.5a: session cookie present + httpOnly + lax + path=/.
+    // Cookie surface: session cookie present + httpOnly + lax + path=/.
     // Secure is gated on NODE_ENV=production and unit tests run in NODE_ENV=test, so it's
     // verified by inspection of plugins/auth.ts:setSessionCookie rather than asserted here.
     expect(setCookie).toEqual(expect.stringContaining("skillgauge_session="));
@@ -188,7 +188,7 @@ describe("auth routes", () => {
     });
   });
 
-  // --- Phase 1.5d: session rotation via jwt_epoch ---
+  // --- Session rotation via jwt_epoch ---
 
   it("rejects a token signed with a stale epoch as INVALID_SESSION", async () => {
     // Register, then forge a token with the SAME secret but epoch=0 (one less than the
@@ -265,8 +265,8 @@ describe("auth routes", () => {
   });
 
   it("password reset confirm bumps the epoch so existing sessions are invalidated", async () => {
-    // This closes the known gap from Phase 1.5b: a phished reset link should not leave
-    // the original session active. After confirm, the previously-issued cookie must fail.
+    // A phished reset link should not leave the original session active. After confirm,
+    // the previously-issued cookie must fail.
     const reg = await app.inject({
       method: "POST",
       url: "/api/auth/register",

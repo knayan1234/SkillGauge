@@ -2,8 +2,8 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { QueryWrapper } from "@/test/queryWrapper";
 import type { User } from "@/services/api";
 
-// Mock the api module — Phase 1 hits real HTTP in production, but tests assert the hook's
-// state machine, not the network. Each test seeds fetchMe's return value to drive the /me path.
+// Mock the api module — production hits real HTTP, but tests assert the hook's state
+// machine, not the network. Each test seeds fetchMe's return value to drive the /me path.
 jest.mock("@/services/api", () => {
   const actual = jest.requireActual("@/services/api") as Record<
     string,

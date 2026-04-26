@@ -12,7 +12,7 @@ import { usersRepo } from "@/db/repos/users";
 const BCRYPT_ROUNDS = 10;
 
 // 32 bytes = 256 bits of entropy. Hex-encoded → 64 chars on the wire. Good headroom against
-// brute-force even without rate limits (Phase 1.5c will add those anyway).
+// brute-force even without rate limits (we add those at the route layer anyway).
 const TOKEN_BYTES = 32;
 
 // Errors carry a `code` for the route layer to translate into the wire {code, message}
@@ -27,8 +27,8 @@ export class PasswordResetError extends Error {
 }
 
 // Result returned to the route. `link` is null in production builds — there it'd be
-// emailed (Phase 4). Today: dev-mode helper. The FE never sees `link`; the route logs it
-// to stdout and returns the opaque empty 200 to the caller.
+// emailed via a real provider. Today: dev-mode helper. The FE never sees `link`; the
+// route logs it to stdout and returns the opaque empty 200 to the caller.
 export interface ResetRequestResult {
   link: string | null;
 }
@@ -41,7 +41,7 @@ export const passwordResetService = {
   // Always succeeds from the caller's perspective — no enumeration of registered emails.
   // If the user exists, we generate + store a token. If not, we return null silently and
   // the route still emits a 200. Same response time? Not strictly equalized today;
-  // TODO:phase-1.5c add timing equalizer once rate limits are in place.
+  // TODO: add timing equalizer once rate limits are in place.
   async requestReset(email: string): Promise<ResetRequestResult> {
     const user = await usersRepo.findByEmail(email);
     if (!user) {
@@ -63,7 +63,7 @@ export const passwordResetService = {
     });
 
     // Caller (route) logs the link to stdout in dev. Production: this becomes a mail send.
-    // TODO:phase-4 swap this string for a transactional-mail call (SES/Resend/Postmark).
+    // TODO: swap this string for a transactional-mail call (SES/Resend/Postmark).
     return { link: `/reset?token=${plainToken}` };
   },
 
@@ -93,9 +93,9 @@ export const passwordResetService = {
     const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     await usersRepo.updatePasswordHash(doc.userId, passwordHash);
 
-    // Phase 1.5d: a password reset MUST invalidate every existing session for this user.
-    // Bumping jwtEpoch makes every previously-signed token fail requireAuth's epoch check
-    // on the next request — instant global logout, no token tracking required.
+    // A password reset MUST invalidate every existing session for this user. Bumping
+    // jwtEpoch makes every previously-signed token fail requireAuth's epoch check on the
+    // next request — instant global logout, no token tracking required.
     await usersRepo.bumpJwtEpoch(doc.userId);
   },
 };

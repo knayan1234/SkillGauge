@@ -19,18 +19,18 @@
  *     (login / register / forgot) so we never have two modals racing.
  *
  * Why this isn't a dropdown: today the menu has at most one action per state (Sign out
- * or Sign in). A dropdown for one item is more friction than affordance. When 1.5d's
+ * or Sign in). A dropdown for one item is more friction than affordance. When
  * "logout-all" or a future settings/profile link gets exposed in the UI, this is the
  * place to swap in a Radix DropdownMenu.
  *
  * Loading state: useAuth() is loading on first paint while /api/me is in flight. We
  * deliberately render NOTHING during loading so the header doesn't flicker between
- * "Sign in" and "Sign out" as the cache hydrates. A subtle skeleton would be Phase 4
- * polish — for now blank is the right default.
+ * "Sign in" and "Sign out" as the cache hydrates. A subtle skeleton would be a polish
+ * pass — for now blank is the right default.
  *
- * TODO:phase-1.5d wire a "Sign out everywhere" entry once a Radix DropdownMenu is added.
- * TODO:phase-1.6c add the LLM provider badge as a sibling component in the header
- * (interview header only, not the global one — the badge is interview-specific).
+ * TODO: wire a "Sign out everywhere" entry once a Radix DropdownMenu is added.
+ * TODO: add the LLM provider badge as a sibling component in the header (interview
+ * header only, not the global one — the badge is interview-specific).
  */
 
 import { useState } from "react";

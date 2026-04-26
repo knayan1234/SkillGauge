@@ -1,18 +1,16 @@
 /**
  * Single source of truth for every wire-level zod schema in SkillGauge.
  *
- * Why this file exists (Phase 1.5e):
- *   1. Before this, schemas were scattered across `modules/auth/auth.schema.ts`,
+ * Why this file exists:
+ *   1. Without it, schemas would be scattered across `modules/auth/auth.schema.ts`,
  *      `modules/auth/password.schema.ts`, and `modules/sessions/sessions.schema.ts`.
  *      Multiple sources of truth = drift risk between routes and tests.
  *   2. The FE [services/api.ts](web/services/api.ts) mirrors these shapes by hand. With
  *      one BE file as canon, the FE diff-check becomes a single search.
- *   3. Phase 2 will reuse these in adapter tests (e.g. mocking session creation against
- *      the real schema). Lifting them now means Phase 2 doesn't have to chase imports.
+ *   3. Adapter tests (e.g. mocking session creation against the real schema) reuse these,
+ *      so consumers don't have to chase imports.
  *
- * Convention: every schema gets a `*Schema` zod export AND an inferred type alias. Both
- * are named identically to their pre-1.5e module-local counterparts, so the only churn
- * is the import path. Routes/tests just change `from "./auth.schema"` → `from "@/shared/contracts"`.
+ * Convention: every schema gets a `*Schema` zod export AND an inferred type alias.
  *
  * What this file does NOT hold:
  *   - Storage shapes (`UserDoc`, `SessionDoc`, `MessageDoc`, etc.) — those live in
@@ -20,9 +18,6 @@
  *     storage shape are different concerns even when they look similar.
  *   - Service-layer DTOs (`AuthResult`, `SessionInitRequest` from shared/types) — those
  *     are TypeScript-only contracts between layers, not validated payloads.
- *
- * TODO:phase-1.6 add `healthInfoResponseSchema` for /api/health/info when 1.6c lands.
- * TODO:phase-2c bump initSessionSchema to support binary resume payloads via base64.
  */
 
 import { z } from "zod";
@@ -84,8 +79,8 @@ export type RoleLevel = (typeof ROLE_LEVELS)[number];
 // 10MB cap on resumeContent is a soft DoS guard; with FileReader.readAsText the FE
 // already validates ≤5MB at the input layer.
 //
-// TODO:phase-2c rename `resumeContent` → `resumeContentBase64` and add `resumeMime`
-// field once we wire `pdf-parse` + `mammoth`. Bump request schema version then.
+// TODO: rename `resumeContent` → `resumeContentBase64` and add `resumeMime` field once
+// we wire `pdf-parse` + `mammoth`. Bump request schema version then.
 export const initSessionSchema = z.object({
   resumeFileName: z.string().min(1).max(255),
   resumeContent: z.string().min(1).max(10_000_000),

@@ -1,5 +1,6 @@
-// Provider-agnostic interface. Phase 1 uses `stubClient`; Phase 2 will add OpenAI/Anthropic impls
-// behind this same type — handlers never import a vendor SDK directly. See ARCHITECTURE.md §17.
+// Provider-agnostic interface. The default `stubClient` implements it; OpenAI/Anthropic
+// adapters slot in behind the same type — handlers never import a vendor SDK directly.
+// See ARCHITECTURE.md §17 (testing strategy) + §10 (LLM abstraction).
 
 import type {
   InterviewStyle,

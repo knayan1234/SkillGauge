@@ -4,7 +4,7 @@
  * /reset — destination of the password reset email link.
  *
  * The user receives a link of the form `/reset?token=<64-hex-chars>` from the email
- * (today: from stdout in dev mode; Phase 4 swaps to a real mail provider). This page
+ * (today: from stdout in dev mode; production swaps to a real mail provider). This page
  * pulls the token out of the URL and hands it to PasswordResetForm.
  *
  * Defensive UI: if the user lands here without a `token` query param (e.g., they typed

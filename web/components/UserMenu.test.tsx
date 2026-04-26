@@ -1,5 +1,5 @@
 /**
- * UserMenu — Phase 1.6a auth-aware header affordance.
+ * UserMenu — auth-aware header affordance.
  *
  * Tests pin down the three render states (loading / authed / anonymous) and the two
  * click outcomes (logout-and-route, openAuthModal). useAuth and useAuthModal are mocked

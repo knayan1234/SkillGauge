@@ -3,7 +3,7 @@ import { QueryWrapper } from "@/test/queryWrapper";
 import type { AnswerResult, Message, Session } from "@/services/api";
 
 // Mock the api module so tests assert the hook's state machine, not the network.
-// Each test arranges the next init/submit response explicitly — matches Phase 1 HTTP contract.
+// Each test arranges the next init/submit response explicitly — matches the HTTP contract.
 jest.mock("@/services/api", () => {
   const actual = jest.requireActual("@/services/api") as Record<
     string,

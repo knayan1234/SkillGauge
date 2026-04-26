@@ -25,7 +25,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     credentials: true,
   });
 
-  // Phase 1.5c — per-IP rate limiter. Registered globally with `global: false` so each
+  // Per-IP rate limiter. Registered globally with `global: false` so each
   // route opts in via `config.rateLimit`. See backend/src/plugins/rateLimit.ts.
   await registerRateLimit(app);
 

@@ -54,7 +54,7 @@ describe("session routes", () => {
       payload: baseInitPayload,
     });
     expect(res.statusCode).toBe(401);
-    // Phase 1.5e: structured error contract — body has {code, message}, not legacy {error}.
+    // Structured error contract — body has {code, message}, not legacy {error}.
     expect(res.json().code).toBe("NOT_AUTHENTICATED");
   });
 

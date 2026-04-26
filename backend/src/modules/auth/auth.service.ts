@@ -15,9 +15,9 @@ export class AuthError extends Error {
     public readonly code:
       | "EMAIL_TAKEN"
       | "INVALID_CREDENTIALS"
-      // Phase 1.5c: per-email soft lockout after N failed attempts in a rolling window.
-      // 423 Locked (RFC 4918) maps cleanly. Distinct from rate-limit (429) so the FE can
-      // show a "try again in 15 minutes or reset your password" message specifically.
+      // Per-email soft lockout after N failed attempts in a rolling window. 423 Locked
+      // (RFC 4918) maps cleanly. Distinct from rate-limit (429) so the FE can show a
+      // "try again in 15 minutes or reset your password" message specifically.
       | "ACCOUNT_LOCKED",
     message: string,
   ) {
@@ -29,9 +29,9 @@ function toApiUser(doc: { _id: string; email: string; name: string }): User {
   return { id: doc._id, email: doc.email, name: doc.name };
 }
 
-// Phase 1.5d: helper that returns the user's current jwtEpoch, defaulting legacy docs
-// (registered before 1.5d landed) to 1. Centralized so a future migration that backfills
-// the field for all users only has to flip this in one place.
+// Helper that returns the user's current jwtEpoch, defaulting legacy docs (registered
+// before the field existed) to 1. Centralized so a future migration that backfills the
+// field for all users only has to flip this in one place.
 function epochOf(doc: { jwtEpoch?: number }): number {
   return doc.jwtEpoch ?? 1;
 }
@@ -48,13 +48,13 @@ export const authService = {
   async register(email: string, password: string): Promise<AuthResult> {
     const existing = await usersRepo.findByEmail(email);
     if (existing) {
-      // Uniform error timing isn't enforced here — Phase 1 scope. A production auth layer
-      // should add a timing-equaliser to avoid email-enumeration via response time.
+      // Uniform error timing isn't enforced here. A production auth layer should add a
+      // timing-equaliser to avoid email-enumeration via response time.
       throw new AuthError("EMAIL_TAKEN", "Email already registered");
     }
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    // Phase 1.5d: every new user starts at epoch 1. The first time the epoch ever bumps
-    // (logout-all, password reset), tokens signed with epoch 1 become INVALID_SESSION.
+    // Every new user starts at epoch 1. The first time the epoch ever bumps (logout-all,
+    // password reset), tokens signed with epoch 1 become INVALID_SESSION.
     const doc = {
       _id: randomUUID(),
       email,
@@ -68,9 +68,9 @@ export const authService = {
   },
 
   async login(email: string, password: string, ip = "unknown"): Promise<AuthResult> {
-    // Phase 1.5c: pre-bcrypt lockout check. We hash by email (not by user ID) so even
-    // unknown emails count toward a lockout — denying attackers an "exists vs not"
-    // signal. The check runs BEFORE the bcrypt to keep CPU bounded under attack.
+    // Pre-bcrypt lockout check. We hash by email (not by user ID) so even unknown emails
+    // count toward a lockout — denying attackers an "exists vs not" signal. The check
+    // runs BEFORE the bcrypt to keep CPU bounded under attack.
     const emailHash = hashEmailForLog(email);
     const failures = await loginAttemptsRepo.countActive(emailHash);
     if (failures >= env.LOGIN_LOCKOUT_THRESHOLD) {

@@ -30,7 +30,7 @@ export async function ensureIndexes(): Promise<void> {
       },
     );
 
-  // password_reset_tokens (Phase 1.5b):
+  // password_reset_tokens:
   // - tokenHash unique so a collision can't grant access to another user's reset.
   // - expiresAt TTL → Mongo deletes the doc automatically once the moment passes,
   //   so used + expired tokens disappear without a cron job. expireAfterSeconds=0
@@ -42,7 +42,7 @@ export async function ensureIndexes(): Promise<void> {
     .collection("password_reset_tokens")
     .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
-  // login_attempts (Phase 1.5c):
+  // login_attempts:
   // - (emailHash, expiresAt) compound supports countActive() — count all unexpired
   //   failures for a given email in one indexed query, hot path on every login.
   // - expiresAt TTL auto-deletes failures after the lockout window passes, keeping the

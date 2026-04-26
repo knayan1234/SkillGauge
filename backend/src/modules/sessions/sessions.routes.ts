@@ -1,10 +1,9 @@
 /**
  * Routes for the interview-session lifecycle.
  *
- * Phase 1.5e: schemas now come from `@/shared/contracts` (single source of truth) and
- * every error response uses the project-wide `{code, message}` shape. The 5 distinct
- * error codes here let the FE branch on machine-readable identifiers instead of parsing
- * strings:
+ * Schemas come from `@/shared/contracts` (single source of truth) and every error
+ * response uses the project-wide `{code, message}` shape. The 5 distinct error codes
+ * here let the FE branch on machine-readable identifiers instead of parsing strings:
  *   - INVALID_FORMAT         (400) — zod parse failure on body or :index path param
  *   - SESSION_NOT_FOUND      (404) — id doesn't resolve to a session, or its current
  *                                    question slot is missing (corrupt state)

@@ -1,6 +1,6 @@
 # SkillGauge Implementation Status
 
-**Current phase:** Phase 1.6b — Expanded homepage **(COMPLETE ✓)** (Phase 1.5 fully complete; 1.6a + 1.6b done)
+**Current phase:** Phase 1.6c — `/api/health/info` + FE LLM badge **(COMPLETE ✓)** (Phase 1.5 fully complete; 1.6a + 1.6b + 1.6c done; 1.6d pending)
 **Last updated:** 2026-04-25
 
 ## Purpose
@@ -26,7 +26,7 @@ For the architectural reference see [ARCHITECTURE.md](ARCHITECTURE.md). For the 
 - Resume-change guard: starting a new interview while one is active prompts to archive the prior snapshot (localStorage) before overwriting the live session handoff blob.
 - The old `skillgauge/` RR7 prototype has been deleted (Phase 0b).
 - CI runs two parallel jobs (`web`, `backend`) — each install → typecheck → test → build.
-- 26 FE tests + 37 BE tests = 63 total, green (FE bumped from 23 to 26 in Phase 1.6a: +3 UserMenu cases).
+- 29 FE tests + 40 BE tests = 69 total, green. Across Phase 1.6: FE went 23 → 26 (1.6a UserMenu) → 29 (1.6c LlmBadge); BE went 37 → 40 (1.6c health/info contract).
 - Auth surface (Phase 1.5a + 1.5b + 1.5c + 1.5d) supports register / login / logout / **logout-all** / `/me` / password reset request / password reset confirm. Defense-in-depth: per-IP rate limit + per-email soft lockout + structured `{code, message}` errors + **per-user JWT epoch rotation**.
 - Codes: `INVALID_FORMAT`, `EMAIL_TAKEN`, `INVALID_CREDENTIALS`, `NOT_AUTHENTICATED`, `INVALID_SESSION` (now also covers stale epoch + deleted-user paths), `USER_NOT_FOUND`, `INVALID_TOKEN`, `ACCOUNT_LOCKED`, `RATE_LIMIT_EXCEEDED`.
 - Env-driven knobs: `JWT_TTL_DAYS` (7), `RESET_TTL_MIN` (30), `AUTH_RATE_PER_MIN` (10), `LOGIN_LOCKOUT_THRESHOLD` (5), `LOGIN_LOCKOUT_WINDOW_MIN` (15).

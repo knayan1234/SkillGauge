@@ -1,4 +1,4 @@
-// Phase 1.5b — password reset flow.
+// Password reset flow.
 // Tests cover the opaque-200 request behavior, the happy-path consume, and the three
 // failure modes (bad token, expired, replayed) all collapsing to INVALID_TOKEN.
 //

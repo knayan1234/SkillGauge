@@ -1,5 +1,5 @@
-// Single source of truth for browser-storage keys. Phase 1 removed localStorage auth
-// (moved to httpOnly cookie), so only the setup→interview handoff remains.
+// Single source of truth for browser-storage keys. localStorage auth was removed (moved
+// to httpOnly cookie), so only the setup→interview handoff remains.
 // Any new keys go here — never hard-code a string at a call site.
 export const STORAGE_KEYS = {
   session: {

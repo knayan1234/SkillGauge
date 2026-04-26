@@ -4,9 +4,9 @@ import type {
   QuestionContext,
 } from "./LLMClient";
 
-// Phase 1 stub. Canned questions grouped by interview style + difficulty.
-// The stub is intentionally deterministic so the FE can trust the branching
-// before Phase 2 swaps in a real provider against this same interface.
+// Default deterministic stub provider. Canned questions grouped by interview style +
+// difficulty. The stub is intentionally deterministic so the FE can trust the branching
+// before a real provider gets swapped in against this same interface.
 
 const BEHAVIORAL_QUESTIONS = [
   "Tell me about yourself and your background.",

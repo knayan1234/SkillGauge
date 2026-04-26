@@ -38,6 +38,4 @@ export const passwordResetTokensRepo = {
     return res ?? null;
   },
 
-  // TODO:phase-1.5d when we ship jwt_epoch, also wipe a user's outstanding reset tokens
-  // here so consuming one cancels the others — defense in depth against parallel resets.
 };

@@ -21,7 +21,7 @@
  * type a 6+ char password correctly on the first try when they can't see what they're
  * typing. The two fields are checked for equality in the zod schema's .refine().
  *
- * TODO:phase-1.6 add a "show password" toggle (eye icon) for accessibility.
+ * TODO: add a "show password" toggle (eye icon) for accessibility.
  */
 
 import { useState } from "react";

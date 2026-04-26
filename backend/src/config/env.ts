@@ -18,7 +18,7 @@ const schema = z.object({
   // Password reset token lifetime in minutes. 30 is the industry default — long enough
   // for the user to switch from email tab to the app, short enough to limit replay risk.
   RESET_TTL_MIN: z.coerce.number().int().positive().default(30),
-  // Auth rate limit + lockout (Phase 1.5c).
+  // Auth rate limit + lockout.
   // - LOGIN_LOCKOUT_THRESHOLD: failed attempts in the window before soft lockout kicks in.
   // - LOGIN_LOCKOUT_WINDOW_MIN: window length (minutes) for the failure count + the
   //   lockout duration itself (they share a value — TTL on each failure record matches
