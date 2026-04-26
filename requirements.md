@@ -2,7 +2,7 @@
 
 **Scope:** what you need to install, configure, and run to keep the **backend** (and FE talking to it) stand up locally and in CI. Keep this file in lockstep with [backend/.env.example](backend/.env.example) and [backend/package.json](backend/package.json).
 
-**Last updated:** 2026-04-25 (Phase 2c complete — PDF/DOCX parsing wired; next is Phase 2d cost guards)
+**Last updated:** 2026-04-25 (Phase 2 fully complete — all of 2b/2a/2e/2c/2d shipped. Plan target reached.)
 
 ---
 
@@ -112,7 +112,7 @@ Smoke check:
 ## 6. Keeping it standing — operational checklist
 
 ### Before every commit
-- `cd backend && npx tsc --noEmit && npm test` — 88/88 green
+- `cd backend && npx tsc --noEmit && npm test` — 92/92 green
 - `cd web && npx tsc --noEmit && npm test -- --ci && npm run build` — 39/39 green
 - Do NOT commit `.env` or any file that dumps secrets
 
@@ -161,7 +161,7 @@ These are concrete, low-risk items you should do before touching Phase 1.5 featu
 5. **Wire `backend/.env.example` into the FE `web/README.md`** — currently the two READMEs don't cross-reference each other, and new contributors miss the `CORS_ORIGIN` ↔ `NEXT_PUBLIC_API_BASE_URL` pairing.
 6. **Add a `docker-compose.yml`** at the repo root with a single `mongo` service + named volume. Avoids the `docker run` incantation from §1 and makes teardown `docker compose down` instead of `docker rm`.
 7. **Write a one-page `RUNBOOK.md`** (when we move toward Phase 4 deploy) listing: how to tail logs, how to rotate JWT, how to restart, how to restore from backup, who to page. Stub it now so Phase 4 has a home for the content.
-8. **Start Phase 2d — Cost + rate guards (per-user daily token quota + input-length guard)** once 1–6 land. (Phase 1.5, 1.6, 2b, 2a/2e, and 2c all complete on 2026-04-25.) Smoke testing the real LLM providers requires either an OpenAI or Anthropic API key — see §10 below for sign-up instructions.
+8. **Phase 1 + 1.5 + 1.6 + 2 are all fully complete (2026-04-25).** Next major milestone (out of the current plan's scope) is Phase 3 — long-term memory, real `GET /api/sessions` list, vector retrieval, `/dashboard` route. Until then: smoke-test the real LLM providers by adding an API key per §10 below.
 
 ---
 

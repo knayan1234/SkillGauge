@@ -12,6 +12,8 @@
  *   - SESSION_FORBIDDEN          (403) — session belongs to another user
  *   - SESSION_COMPLETED          (409) — caller tried to submit an answer after isComplete
  *   - SESSION_INDEX_MISMATCH     (409) — caller asked for question N but session is on M
+ *   - QUOTA_EXCEEDED             (402) — daily per-user token quota reached
+ *   - INPUT_TOO_LARGE            (413) — single LLM call's input exceeded MAX_INPUT_CHARS
  */
 
 import type { FastifyInstance } from "fastify";
@@ -122,6 +124,11 @@ function statusForSessionError(code: SessionError["code"]): number {
       // 415 Unsupported Media Type — semantically right; lets the FE branch and
       // surface "your file format isn't supported" rather than a generic 400.
       return 415;
+    case "QUOTA_EXCEEDED":
+      // 402 Payment Required — semantically right for "you've used your allowance."
+      return 402;
+    case "INPUT_TOO_LARGE":
+      return 413;
   }
 }
 
@@ -143,5 +150,9 @@ function codeForSessionError(code: SessionError["code"]): string {
       return "RESUME_PARSE_FAILED";
     case "UNSUPPORTED_RESUME_MIME":
       return "UNSUPPORTED_RESUME_MIME";
+    case "QUOTA_EXCEEDED":
+      return "QUOTA_EXCEEDED";
+    case "INPUT_TOO_LARGE":
+      return "INPUT_TOO_LARGE";
   }
 }

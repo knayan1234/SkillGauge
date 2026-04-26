@@ -1,6 +1,6 @@
 # SkillGauge Implementation Status
 
-**Current phase:** Phase 2c — Resume + JD parsing **(COMPLETE ✓)** (Phase 1.5 + 1.6 + 2b + 2a/2e + 2c complete; only 2d remaining in Phase 2)
+**Current phase:** Phase 2 — AI Intelligence **(FULLY COMPLETE ✓ — all 5 sub-phases shipped)** (1.5 + 1.6 + 2 all complete; next major milestone is Phase 3 long-term memory + dashboard, out of the current plan's scope)
 **Last updated:** 2026-04-25
 
 ## Purpose
@@ -26,7 +26,7 @@ For the architectural reference see [ARCHITECTURE.md](ARCHITECTURE.md). For the 
 - Resume-change guard: starting a new interview while one is active prompts to archive the prior snapshot (localStorage) before overwriting the live session handoff blob.
 - The old `skillgauge/` RR7 prototype has been deleted (Phase 0b).
 - CI runs two parallel jobs (`web`, `backend`) — each install → typecheck → test → build.
-- 39 FE tests + 88 BE tests = 127 total, green. Phase 2c added 13 BE tests (11 ingest cases + 2 sessions error-code cases) taking BE from 75 → 88.
+- 39 FE tests + 92 BE tests = 131 total, green. Phase 2d added 4 BE tests (`quotas.test.ts`) taking BE from 88 → 92.
 - Auth surface (Phase 1.5a + 1.5b + 1.5c + 1.5d) supports register / login / logout / **logout-all** / `/me` / password reset request / password reset confirm. Defense-in-depth: per-IP rate limit + per-email soft lockout + structured `{code, message}` errors + **per-user JWT epoch rotation**.
 - Codes: `INVALID_FORMAT`, `EMAIL_TAKEN`, `INVALID_CREDENTIALS`, `NOT_AUTHENTICATED`, `INVALID_SESSION` (now also covers stale epoch + deleted-user paths), `USER_NOT_FOUND`, `INVALID_TOKEN`, `ACCOUNT_LOCKED`, `RATE_LIMIT_EXCEEDED`.
 - Env-driven knobs: `JWT_TTL_DAYS` (7), `RESET_TTL_MIN` (30), `AUTH_RATE_PER_MIN` (10), `LOGIN_LOCKOUT_THRESHOLD` (5), `LOGIN_LOCKOUT_WINDOW_MIN` (15).
@@ -160,7 +160,7 @@ SkillGauge/
 | Prompt templates (provider-agnostic) | ✓ done (2b) | `backend/src/llm/prompts/v1/` with `renderGenerateQuestion`, `renderGradeAnswer`, `gradeResponseSchema`, `PROMPT_VERSION` constant. Stub exercises them in CI; `messages.promptVersion` tags every question/feedback row. |
 | Real LLM provider | ✓ done (2a/2e — placeholder mode) | `OpenAILLMClient` + `AnthropicLLMClient` shipped, both tested with mocked SDKs (24 new BE tests). Factory at [llm/index.ts](backend/src/llm/index.ts) throws clear startup error when provider is selected without its key. **Smoke test against a real model requires an API key** — see [requirements.md §10](requirements.md). |
 | Resume + JD parsing | ✓ done (2c) | New `backend/src/modules/sessions/ingest.ts` dispatches PDF (`pdf-parse@^1.x`) / DOCX (`mammoth`) / text-fallback. FE sends base64 + MIME; BE persists parsed plain text (raw bytes discarded). New `RESUME_PARSE_FAILED` (400) + `UNSUPPORTED_RESUME_MIME` (415) error codes. Sidebar "View résumé" dialog displays parsed text. |
-| Rate limiting + cost guardrails | Medium | Per-user quotas; abort on abusive input length |
+| Rate limiting + cost guardrails | ✓ done (2d) | `usage_quotas` collection (per-user-per-day, TTL'd); pre-LLM-call input-length cap + daily token quota; new `QUOTA_EXCEEDED` (402) + `INPUT_TOO_LARGE` (413) wire codes. Token accounting via 4-chars-per-token heuristic until production swaps in provider-reported usage. |
 | Prompt regression tests | Medium | Golden-answer fixtures; snapshot LLM output shape |
 
 ### Phase 3 — Long-term Memory + Chatroom Sidebar + Dashboard

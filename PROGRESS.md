@@ -2,9 +2,8 @@
 
 Living document tracking every change made during the end-to-end build. Newest entries at the top within each phase.
 
-**Current phase:** Phase 2c — Resume + JD parsing **(COMPLETE ✓)** (PDF + DOCX → text via `pdf-parse` + `mammoth`; FE sends base64 + MIME, BE dispatches to the right parser; sidebar "View résumé" dialog now shows readable text for all formats; new `RESUME_PARSE_FAILED` (400) + `UNSUPPORTED_RESUME_MIME` (415) error codes)
-**Next phase:** Phase 2d — Cost + rate guards (per-user daily token quota + input-length guard)
-**Then:** Phase 3 long-term memory + chatroom sidebar (real data) → Phase 4 production
+**Current phase:** Phase 2d — Cost + rate guards **(COMPLETE ✓)** (`usage_quotas` collection + per-call guards before every LLM invocation; new `QUOTA_EXCEEDED` (402) + `INPUT_TOO_LARGE` (413) error codes; daily TTL'd counter resets at UTC midnight). **Phase 2 fully complete.**
+**Next phase:** Phase 3 — Long-term memory + chatroom sidebar (real data) — managed Atlas, embeddings, vector DB, `GET /api/sessions` real list, `/dashboard` route. Out of the current plan's scope (the user approved a path through end of Phase 2 only).
 **Awaiting input from user (for Phase 2 smoke test against a real LLM):** OpenAI **OR** Anthropic API key. See [requirements.md §10](requirements.md). App keeps working with `LLM_PROVIDER=stub` indefinitely.
 **Started:** 2026-04-18
 **Phase 0a finished:** 2026-04-18
@@ -23,6 +22,7 @@ Living document tracking every change made during the end-to-end build. Newest e
 **Phase 2b finished:** 2026-04-25
 **Phase 2a/2e finished:** 2026-04-25 (placeholder mode — adapter classes committed + tested; smoke test pending key)
 **Phase 2c finished:** 2026-04-25
+**Phase 2d finished:** 2026-04-25 (Phase 2 fully complete)
 
 ---
 
@@ -1161,10 +1161,60 @@ Every question + feedback message persists `promptVersion`. When v2 prompts ship
 // (none — flow complete; legacy .doc support could land later via antiword if demand exists)
 ```
 
-### 2d — Cost + rate guards
-- [ ] Per-user daily token/call quota (Mongo counter doc, TTL-reset)
-- [ ] Short-circuit abusive input length before calling the LLM
-- [ ] 402/429 distinct error codes in response
+### 2d — Cost + rate guards ✓
+
+#### Goals
+- ✓ Per-user daily token/call quota (Mongo `usage_quotas` collection, doc per `(userId, day)`, 32-day TTL).
+- ✓ Pre-LLM-call input-length guard (`MAX_INPUT_CHARS`, default 10000) — concatenated résumé + JD + history + answer.
+- ✓ Distinct error codes: `QUOTA_EXCEEDED` (402 Payment Required) + `INPUT_TOO_LARGE` (413 Payload Too Large).
+- ✓ Both guards fire BEFORE the LLM SDK call, so abusive payloads don't burn budget. Token accounting via a 4-chars-per-token heuristic (real adapters can later swap in provider-reported counts when needed).
+
+#### Final verification (2026-04-25)
+
+| Command | Status |
+|---|---|
+| `cd backend && npx tsc --noEmit` | ✓ clean |
+| `cd backend && npm test` | ✓ 92/92 (was 88 — +4 quota cases in `quotas.test.ts`) |
+| `cd backend && npm run build` | ✓ `dist/` emitted |
+| FE | unchanged — guards are BE-only; FE surfaces the new codes via the existing `ApiError.code` plumbing |
+
+#### New env vars
+
+| Var | Default | Purpose |
+|---|---|---|
+| `DAILY_TOKEN_LIMIT` | 100000 | Per-user daily token ceiling. ~25 grading calls on `gpt-4o-mini`. Resets at UTC midnight. |
+| `MAX_INPUT_CHARS` | 10000 | Hard cap on the total characters fed into a single LLM call. |
+
+#### Changelog
+
+- **2026-04-25** — New [backend/src/db/repos/usageQuotas.ts](backend/src/db/repos/usageQuotas.ts): `getCurrentTokens(userId)` + `recordCall(userId, tokens)` + `utcDayKey()`. Document `_id` is `${userId}:${day}` so the (userId, day) pair is uniquely keyable without a separate composite index. Atomic `$inc` on `recordCall` so concurrent calls don't lose updates. 32-day `expiresAt` TTL keeps the collection bounded with no background sweeper.
+- **2026-04-25** — [backend/src/db/indexes.ts](backend/src/db/indexes.ts): added `userId` index + TTL index on `usage_quotas`.
+- **2026-04-25** — [backend/src/config/env.ts](backend/src/config/env.ts) + [.env.example](backend/.env.example): `DAILY_TOKEN_LIMIT` + `MAX_INPUT_CHARS`.
+- **2026-04-25** — [sessions.service.ts](backend/src/modules/sessions/sessions.service.ts):
+  - `SessionError.code` gains `QUOTA_EXCEEDED` and `INPUT_TOO_LARGE`.
+  - New private helpers: `ensureUnderQuotaAndLength(userId, inputChars)` (pre-call guard) and `estimateTokens(...strings)` (4 chars/token heuristic).
+  - Three pre-call guards inserted: before the first question on `initialize()`, before each subsequent `getQuestion()`, and twice in `submitAnswer()` (before grading, before next-question generation).
+  - Each successful LLM call now writes `usageQuotasRepo.recordCall(userId, estimateTokens(...))` so the daily counter reflects real consumption.
+- **2026-04-25** — [sessions.routes.ts](backend/src/modules/sessions/sessions.routes.ts): `statusForSessionError` + `codeForSessionError` switch cases extended for the two new codes.
+- **2026-04-25** — Tests: new [quotas.test.ts](backend/tests/quotas.test.ts) (4 cases): oversize JD → 413 INPUT_TOO_LARGE; pre-planted exceeded quota doc → 402 QUOTA_EXCEEDED; successful init records usage > 0; oversize answer → 413.
+- **2026-04-25** — Backend test count: 88 → 92.
+
+#### Files created
+- [backend/src/db/repos/usageQuotas.ts](backend/src/db/repos/usageQuotas.ts)
+- [backend/tests/quotas.test.ts](backend/tests/quotas.test.ts)
+
+#### Files modified
+- [backend/src/config/env.ts](backend/src/config/env.ts), [backend/.env.example](backend/.env.example)
+- [backend/src/db/indexes.ts](backend/src/db/indexes.ts) — `usage_quotas` indexes
+- [backend/src/modules/sessions/sessions.service.ts](backend/src/modules/sessions/sessions.service.ts) — guard helpers + 4 call sites
+- [backend/src/modules/sessions/sessions.routes.ts](backend/src/modules/sessions/sessions.routes.ts) — status/code mapping for new errors
+
+#### Notable gotchas
+1. **Pre-call check, post-call accounting**: the guard runs BEFORE the LLM SDK call (so a hostile payload doesn't burn budget) but the token counter is bumped AFTER (so a failed call doesn't double-count). On a transient retry the SDK call may run twice; we only count once because the adapter retries internally.
+2. **Heuristic token count**: 4 chars/token is OK for English text across both OpenAI and Anthropic. A real production setup would prefer the provider-reported `usage` from each response. Phase 4 observability work can lift this when needed.
+3. **UTC day boundary**: quotas reset at UTC midnight, not the user's local midnight. Trade-off: simpler math + no per-user timezone storage. Acceptable for a personal-app scope.
+4. **Atomic upsert via `$inc` + `$setOnInsert`**: handles the race where two concurrent calls both try to create today's doc. `$setOnInsert` only applies on insert, so the first concurrent call creates the row and the second's increment merges in cleanly.
+5. **Why `_id: "${userId}:${day}"` instead of a generated UUID**: makes the doc deterministically keyable. We can `findOne({_id: id})` without a separate composite index. Good for the per-request hot path.
 
 ### 2e — Anthropic regression suite (folded into 2a/2e placeholder commit)
 

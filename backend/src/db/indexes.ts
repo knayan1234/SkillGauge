@@ -53,6 +53,16 @@ export async function ensureIndexes(): Promise<void> {
   await db
     .collection("login_attempts")
     .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+  // usage_quotas:
+  // - userId index supports per-user history queries (e.g., "show me all of Jane's
+  //   day-by-day usage for the last week"). Phase 3+ may use this for analytics.
+  // - expiresAt TTL auto-deletes quota docs 32 days after their day-of-record so the
+  //   collection stays bounded with no background sweeper.
+  await db.collection("usage_quotas").createIndex({ userId: 1 });
+  await db
+    .collection("usage_quotas")
+    .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 }
 
 // Allow `tsx src/db/indexes.ts` (or `node dist/db/indexes.js`) as a one-shot.

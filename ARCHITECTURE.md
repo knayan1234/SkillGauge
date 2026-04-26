@@ -2,10 +2,10 @@
 
 Living architecture reference. **Update this file in the same commit as any structural change** (new module, new route, new service, phase transition).
 
-**Current phase:** Phase 2c complete — PDF + DOCX parsing wired via `pdf-parse` + `mammoth`. Phase 1.5 + 1.6 + 2b + 2a/2e + 2c all done. Only Phase 2d (cost guards) remains in Phase 2. Smoke-testing real LLM providers needs an API key in `.env`; see [requirements.md §10](requirements.md).
+**Current phase:** Phase 2 fully complete (all 5 sub-phases shipped 2026-04-25). Phase 1.5 + 1.6 + 2 all done. Smoke-testing real LLM providers needs an API key in `.env`; see [requirements.md §10](requirements.md). Next major milestone is Phase 3 (long-term memory + dashboard), out of the current plan's scope.
 **Last updated:** 2026-04-25
-**Scope of this doc:** Full stack — FE (Next.js) in [web/](web/) and BE (Fastify + MongoDB) in [backend/](backend/). The AI layer ships three implementations of `LLMClient`: a deterministic `stubClient` (default), an `OpenAILLMClient`, and an `AnthropicLLMClient`. All three consume the same v1 prompts in `backend/src/llm/prompts/v1/`. Resume ingestion (PDF/DOCX/text) lives in `backend/src/modules/sessions/ingest.ts`.
-**Test baseline:** 88 BE + 39 FE = 127 Jest tests, all green. CI runs both suites in parallel.
+**Scope of this doc:** Full stack — FE (Next.js) in [web/](web/) and BE (Fastify + MongoDB) in [backend/](backend/). The AI layer ships three implementations of `LLMClient`: a deterministic `stubClient` (default), an `OpenAILLMClient`, and an `AnthropicLLMClient`. All three consume the same v1 prompts in `backend/src/llm/prompts/v1/`. Resume ingestion (PDF/DOCX/text) lives in `backend/src/modules/sessions/ingest.ts`. Cost guards (`usage_quotas` collection + per-call input cap) live in the sessions service.
+**Test baseline:** 92 BE + 39 FE = 131 Jest tests, all green. CI runs both suites in parallel.
 
 ---
 
@@ -370,6 +370,10 @@ Source: [backend/src/plugins/auth.ts](backend/src/plugins/auth.ts), [backend/src
 | `SESSION_FORBIDDEN` | 403 | Any session route when the session belongs to another user (Phase 1.5e) |
 | `SESSION_COMPLETED` | 409 | `POST /api/sessions/:id/answers` after `isComplete` (Phase 1.5e) |
 | `SESSION_INDEX_MISMATCH` | 409 | `GET /api/sessions/:id/questions/:index` when caller asked for question N but session is on M (Phase 1.5e) |
+| `RESUME_PARSE_FAILED` | 400 | `POST /api/sessions` when résumé bytes can't be decoded / produce no extractable text (Phase 2c) |
+| `UNSUPPORTED_RESUME_MIME` | 415 | `POST /api/sessions` when résumé MIME isn't supported (e.g., legacy `.doc`) (Phase 2c) |
+| `QUOTA_EXCEEDED` | 402 | Any session route when the user's daily token quota is reached (Phase 2d) |
+| `INPUT_TOO_LARGE` | 413 | Any session route when a single LLM call's combined input exceeds `MAX_INPUT_CHARS` (Phase 2d) |
 
 All wire-level zod schemas live in [backend/src/shared/contracts.ts](backend/src/shared/contracts.ts) as of Phase 1.5e — single source of truth, no per-module schema drift. The mapping from internal `SessionError.code` to wire-level `SESSION_*` code is centralized in two helper functions (`statusForSessionError`, `codeForSessionError`) inside [sessions.routes.ts](backend/src/modules/sessions/sessions.routes.ts).
 
@@ -1128,11 +1132,11 @@ cd web && npm install && npm run dev                            # :3000
 | &nbsp;&nbsp;1.6b — Expanded homepage | ✓ done (2026-04-25) | 4-section landing: hero / how it works / why different / footer CTA. Auth-aware CTAs in hero AND footer. Static-only |
 | &nbsp;&nbsp;1.6c — Active LLM provider badge | pending | `GET /api/health/info` exposes `{llmProvider, llmModel}`; FE chip in interview header |
 | &nbsp;&nbsp;1.6d — Chatroom sidebar (UI only) | ✓ done (2026-04-25) | New `ChatroomEntry` + relative-time util; sidebar reads `localStorage[archived_sessions]`, swappable to server data in 3f without JSX changes |
-| **2 — AI intelligence** (sub-parted) | pending | Swap stubClient → real providers behind same `LLMClient` |
+| **2 — AI intelligence** | ✓ done (2026-04-25) | All five sub-phases shipped (2b prompts → 2a/2e adapters in placeholder mode → 2c PDF/DOCX parsing → 2d cost guards) |
 | &nbsp;&nbsp;**2b — Prompt templates + versioning** | ✓ done (2026-04-25) | Provider-agnostic `backend/src/llm/prompts/v1/`; `PROMPT_VERSION` constant; `messages.promptVersion` field; `gradeResponseSchema` zod for structured-output validation; stub exercises renderers in CI |
 | &nbsp;&nbsp;2a — OpenAI provider | ✓ done (2026-04-25, placeholder mode) | `OpenAILLMClient` thin adapter around 2b's prompts; JSON-mode for grading; one-retry on transient; mocked-SDK tests; needs key to smoke-test |
 | &nbsp;&nbsp;2c — Resume + JD parsing | ✓ done (2026-04-25) | `pdf-parse@^1.x` + `mammoth` dispatched by MIME; FE sends base64; persisted `resumeContent` is parsed plain text; new RESUME_PARSE_FAILED + UNSUPPORTED_RESUME_MIME codes |
-| &nbsp;&nbsp;2d — Cost + rate guards | pending | Per-user token quota; 402/429 codes |
+| &nbsp;&nbsp;2d — Cost + rate guards | ✓ done (2026-04-25) | `usage_quotas` collection (TTL'd); pre-call input-length + daily-token guards; `QUOTA_EXCEEDED` (402) + `INPUT_TOO_LARGE` (413) codes |
 | &nbsp;&nbsp;2e — Anthropic provider + regression | ✓ partial (2026-04-25) | `AnthropicLLMClient` adapter shipped alongside OpenAI in placeholder mode (tool-call grading); shadow CI job + golden-prompt regression tests still pending |
 | 3 — Long-term memory + chatroom sidebar + dashboard | pending | Vector search, real `GET /api/sessions` powering chatroom UI, full transcript hydration, `/dashboard` — sub-parted when 2 ships |
 | 4 — Production readiness | pending | E2E, observability, security headers, deploy — sub-parted when 3 ships |

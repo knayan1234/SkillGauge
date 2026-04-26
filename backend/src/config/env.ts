@@ -41,6 +41,14 @@ const schema = z.object({
   // Per-call timeout for real LLM requests (ms). Default 30s — generous enough for hard
   // questions on slower models, tight enough that a stuck provider doesn't pin a request.
   LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  // Cost + rate guards.
+  // - DAILY_TOKEN_LIMIT: per-user daily ceiling on LLM tokens consumed across all of
+  //   their sessions. Resets at the day boundary (UTC). Default 100k tokens covers
+  //   ~25 grading calls on gpt-4o-mini at typical question/answer lengths.
+  // - MAX_INPUT_CHARS: hard cap on the total characters fed into a single LLM call.
+  //   Defends against abusive payloads that would burn budget without producing signal.
+  DAILY_TOKEN_LIMIT: z.coerce.number().int().positive().default(100_000),
+  MAX_INPUT_CHARS: z.coerce.number().int().positive().default(10_000),
 });
 
 // Dev default keeps `npm run dev` working without a .env file. Production MUST set JWT_SECRET.

@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { env } from "@/config/env";
 import { sessionsRepo, type SessionDoc } from "@/db/repos/sessions";
 import { messagesRepo, type MessageDoc } from "@/db/repos/messages";
+import { usageQuotasRepo } from "@/db/repos/usageQuotas";
 import { createLLMClient } from "@/llm/index";
 import { PROMPT_VERSION } from "@/llm/prompts/v1";
 import type { Session, Message, SessionInitRequest } from "@/shared/types";
@@ -17,11 +19,54 @@ export class SessionError extends Error {
       // / 415 UNSUPPORTED_MIME so the FE can show a specific "we couldn't read your
       // resume" message instead of a generic error.
       | "RESUME_PARSE_FAILED"
-      | "UNSUPPORTED_RESUME_MIME",
+      | "UNSUPPORTED_RESUME_MIME"
+      // Cost guards. QUOTA_EXCEEDED → 402 Payment Required (semantically right for
+      // "you've used your daily allowance"); INPUT_TOO_LARGE → 413 Payload Too Large
+      // for inputs that would burn budget without producing signal.
+      | "QUOTA_EXCEEDED"
+      | "INPUT_TOO_LARGE",
     message: string,
   ) {
     super(message);
   }
+}
+
+/**
+ * Pre-LLM-call guard. Throws SessionError on either guard failure so the route
+ * layer maps it to the right wire-level code + status.
+ *
+ * Daily-token check uses today's UTC quota doc (auto-created on first use). The
+ * input-length check is a flat character cap on whatever we're about to feed the
+ * LLM — concatenated résumé + JD + answer history + the rendered prompt.
+ */
+async function ensureUnderQuotaAndLength(
+  userId: string,
+  inputChars: number,
+): Promise<void> {
+  if (inputChars > env.MAX_INPUT_CHARS) {
+    throw new SessionError(
+      "INPUT_TOO_LARGE",
+      `Input exceeds the per-call cap of ${env.MAX_INPUT_CHARS} characters. Trim your résumé or answer.`,
+    );
+  }
+  const used = await usageQuotasRepo.getCurrentTokens(userId);
+  if (used >= env.DAILY_TOKEN_LIMIT) {
+    throw new SessionError(
+      "QUOTA_EXCEEDED",
+      `Daily token quota of ${env.DAILY_TOKEN_LIMIT} reached. Quota resets at UTC midnight.`,
+    );
+  }
+}
+
+/**
+ * Estimated tokens for a string. Rough heuristic — ~4 chars per token for English text
+ * across both OpenAI and Anthropic tokenisers. Real adapters should prefer the usage
+ * counts from the provider's response when available; this is the fallback for the
+ * stub (which has no token counts) and for accounting before the LLM call returns.
+ */
+function estimateTokens(...strings: string[]): number {
+  const chars = strings.reduce((sum, s) => sum + s.length, 0);
+  return Math.ceil(chars / 4);
 }
 
 const llm = createLLMClient();
@@ -142,8 +187,19 @@ export const sessionsService = {
     };
     await sessionsRepo.create(sessionDoc);
 
+    // Cost guards before the first LLM call. Input length = résumé + JD only; the
+    // history is empty on initialise.
+    await ensureUnderQuotaAndLength(
+      userId,
+      sessionDoc.resumeContent.length + sessionDoc.jobDescription.length,
+    );
     const firstContent = await llm.generateQuestion(
       ctxFromSession(sessionDoc, 0, []),
+    );
+    // Account for tokens. Stub returns no usage data; estimate from input + output.
+    await usageQuotasRepo.recordCall(
+      userId,
+      estimateTokens(sessionDoc.resumeContent, sessionDoc.jobDescription, firstContent),
     );
     const firstDoc: MessageDoc = {
       _id: randomUUID(),
@@ -182,8 +238,29 @@ export const sessionsService = {
     const previousMessages = (await messagesRepo.listBySession(sessionId)).map(
       (m) => ({ type: m.type, content: m.content }),
     );
+    // Cost guards. Input length sums résumé + JD + concatenated message history so
+    // a runaway transcript can't blow past the per-call cap.
+    const historyChars = previousMessages.reduce(
+      (sum, m) => sum + m.content.length,
+      0,
+    );
+    await ensureUnderQuotaAndLength(
+      userId,
+      sessionDoc.resumeContent.length +
+        sessionDoc.jobDescription.length +
+        historyChars,
+    );
     const content = await llm.generateQuestion(
       ctxFromSession(sessionDoc, index, previousMessages),
+    );
+    await usageQuotasRepo.recordCall(
+      userId,
+      estimateTokens(
+        sessionDoc.resumeContent,
+        sessionDoc.jobDescription,
+        ...previousMessages.map((m) => m.content),
+        content,
+      ),
     );
     const doc: MessageDoc = {
       _id: randomUUID(),
@@ -239,12 +316,36 @@ export const sessionsService = {
     const previousMessages = (await messagesRepo.listBySession(sessionId)).map(
       (m) => ({ type: m.type, content: m.content }),
     );
+    // Cost guards before grading.
+    const historyChars = previousMessages.reduce(
+      (sum, m) => sum + m.content.length,
+      0,
+    );
+    await ensureUnderQuotaAndLength(
+      userId,
+      sessionDoc.resumeContent.length +
+        sessionDoc.jobDescription.length +
+        historyChars +
+        answer.length,
+    );
     const ctx = ctxFromSession(
       sessionDoc,
       sessionDoc.currentQuestionIndex,
       previousMessages,
     );
     const graded = await llm.gradeAnswer(currentQ.content, answer, ctx);
+    await usageQuotasRepo.recordCall(
+      userId,
+      estimateTokens(
+        sessionDoc.resumeContent,
+        sessionDoc.jobDescription,
+        ...previousMessages.map((m) => m.content),
+        answer,
+        graded.content,
+        ...graded.feedback.strengths,
+        ...graded.feedback.improvements,
+      ),
+    );
 
     const feedbackDoc: MessageDoc = {
       _id: randomUUID(),
@@ -268,10 +369,31 @@ export const sessionsService = {
 
     let nextQuestion: Message | null = null;
     if (!isComplete) {
+      // Cost guard for the next question call. Same input as the grading call plus
+      // the new feedback content (which the prompt's history summary may include).
+      await ensureUnderQuotaAndLength(
+        userId,
+        sessionDoc.resumeContent.length +
+          sessionDoc.jobDescription.length +
+          historyChars +
+          answer.length +
+          graded.content.length,
+      );
       const nextContent = await llm.generateQuestion({
         ...ctx,
         questionIndex: nextIndex,
       });
+      await usageQuotasRepo.recordCall(
+        userId,
+        estimateTokens(
+          sessionDoc.resumeContent,
+          sessionDoc.jobDescription,
+          ...previousMessages.map((m) => m.content),
+          answer,
+          graded.content,
+          nextContent,
+        ),
+      );
       const nextDoc: MessageDoc = {
         _id: randomUUID(),
         sessionId,
