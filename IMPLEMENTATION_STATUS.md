@@ -1,6 +1,6 @@
 # SkillGauge Implementation Status
 
-**Current phase:** Phase 1.6c — `/api/health/info` + FE LLM badge **(COMPLETE ✓)** (Phase 1.5 fully complete; 1.6a + 1.6b + 1.6c done; 1.6d pending)
+**Current phase:** Phase 1.6 — UI Polish & Visibility **(FULLY COMPLETE ✓ — all 4 sub-phases shipped)**
 **Last updated:** 2026-04-25
 
 ## Purpose
@@ -26,7 +26,7 @@ For the architectural reference see [ARCHITECTURE.md](ARCHITECTURE.md). For the 
 - Resume-change guard: starting a new interview while one is active prompts to archive the prior snapshot (localStorage) before overwriting the live session handoff blob.
 - The old `skillgauge/` RR7 prototype has been deleted (Phase 0b).
 - CI runs two parallel jobs (`web`, `backend`) — each install → typecheck → test → build.
-- 29 FE tests + 40 BE tests = 69 total, green. Across Phase 1.6: FE went 23 → 26 (1.6a UserMenu) → 29 (1.6c LlmBadge); BE went 37 → 40 (1.6c health/info contract).
+- 39 FE tests + 40 BE tests = 79 total, green. Across Phase 1.6: FE went 23 → 26 (1.6a UserMenu) → 29 (1.6c LlmBadge) → 39 (1.6d ChatroomEntry + relativeTime); BE went 37 → 40 (1.6c health/info contract).
 - Auth surface (Phase 1.5a + 1.5b + 1.5c + 1.5d) supports register / login / logout / **logout-all** / `/me` / password reset request / password reset confirm. Defense-in-depth: per-IP rate limit + per-email soft lockout + structured `{code, message}` errors + **per-user JWT epoch rotation**.
 - Codes: `INVALID_FORMAT`, `EMAIL_TAKEN`, `INVALID_CREDENTIALS`, `NOT_AUTHENTICATED`, `INVALID_SESSION` (now also covers stale epoch + deleted-user paths), `USER_NOT_FOUND`, `INVALID_TOKEN`, `ACCOUNT_LOCKED`, `RATE_LIMIT_EXCEEDED`.
 - Env-driven knobs: `JWT_TTL_DAYS` (7), `RESET_TTL_MIN` (30), `AUTH_RATE_PER_MIN` (10), `LOGIN_LOCKOUT_THRESHOLD` (5), `LOGIN_LOCKOUT_WINDOW_MIN` (15).
@@ -151,7 +151,7 @@ SkillGauge/
 | Logout button visible when authed | ✓ done (1.6a) | Global `AuthModalProvider` + new `UserMenu` component in both AppLayout and InterviewHeader. Authed = email + Sign out; anonymous = Sign in (opens shared modal). Landing page CTA also auth-aware. |
 | Expanded homepage | ✓ done (1.6b) | 4-section landing: hero (existing) → "How it works" (3-step user journey) → "Why SkillGauge is different" (long-term memory + context-aware + privacy pitch) → footer CTA. Auth-aware CTAs in hero AND footer. Static-only — no new deps, no new hooks. |
 | Active LLM provider badge | High | `GET /api/health/info` exposes `{llmProvider, llmModel}`; FE chip shows "stub" / "openai · gpt-4o-mini" / etc. so the demo doesn't pretend a real model is grading |
-| Chatroom-style sidebar (UI only) | Medium | Sessions as chatrooms grouped by resume + date; backed by localStorage archive today, swappable to server data in 3f |
+| Chatroom-style sidebar (UI only) | ✓ done (1.6d) | New `ChatroomEntry` component renders one chat-history card; sidebar reads `localStorage[archived_sessions]` and shows live + archived sessions sorted by date with relative timestamps. Reuses the same `ChatroomEntry` shape that 3f will populate from `GET /api/sessions` — no JSX change at the swap. |
 
 ### Phase 2 — AI Intelligence
 

@@ -2,9 +2,9 @@
 
 Living document tracking every change made during the end-to-end build. Newest entries at the top within each phase.
 
-**Current phase:** Phase 1.6c — `/api/health/info` + FE LLM badge **(COMPLETE ✓)** (BE endpoint exposes `{llmProvider, llmModel}`; FE LlmBadge in interview header reads it via react-query with `staleTime: Infinity`)
-**Next phase:** Phase 1.6d — Chatroom sidebar against local archive
-**Then:** Phase 2 AI Intelligence (2b prompts first → 2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar → Phase 4 production
+**Current phase:** Phase 1.6d — Chatroom sidebar **(COMPLETE ✓)** (new `ChatroomEntry` component, sidebar reads `localStorage[archived_sessions]`, shows live + archived sessions sorted by date with relative timestamps via `Intl.RelativeTimeFormat`). **Phase 1.6 fully complete.**
+**Next phase:** Phase 2b — Provider-agnostic prompt templates v1
+**Then:** Phase 2 AI Intelligence (2a/2e providers → 2c parsing → 2d cost guards) → Phase 3 long-term memory + chatroom sidebar (real data) → Phase 4 production
 **Started:** 2026-04-18
 **Phase 0a finished:** 2026-04-18
 **Phase 0b finished:** 2026-04-19
@@ -18,6 +18,7 @@ Living document tracking every change made during the end-to-end build. Newest e
 **Phase 1.6a finished:** 2026-04-25
 **Phase 1.6b finished:** 2026-04-25
 **Phase 1.6c finished:** 2026-04-25
+**Phase 1.6d finished:** 2026-04-25 (Phase 1.6 fully complete)
 
 ---
 
@@ -901,11 +902,52 @@ These are visibility/UX items the user will demo to non-technical reviewers befo
 // TODO:phase-1.5d if a future "Settings" page shows this info, lift this component
 ```
 
-### 1.6d — Foundation for chatroom sidebar (UI only)
-- [ ] [InterviewSidebar.tsx](web/features/interview/InterviewSidebar.tsx) — restructure into a "chatroom list" layout: each entry shows resume filename (truncated) + relative date ("2h ago", "Yesterday", "Mar 12"). Today's active session is the only entry; placeholder rows show what archived sessions will look like
-- [ ] Read existing `localStorage[archived_sessions]` (Phase 1.1 archive guard) to populate the placeholder rows so the UI is real on hydrate
-- [ ] No new BE endpoint yet — Phase 3e wires `GET /api/sessions` so this UI consumes server data instead of localStorage
-- **Why:** users expect a ChatGPT/Discord-style sidebar. Building the UI now (against archived local snapshots) means Phase 3 only has to swap the data source, not rebuild the layout.
+### 1.6d — Foundation for chatroom sidebar (UI only) ✓
+
+#### Goals
+- ✓ New [ChatroomEntry](web/components/ChatroomEntry.tsx) component renders one chat-history card with title + resume filename + relative date + active indicator. Static when no `onSelect` (today's case for archived entries — there's no server-side state to navigate to yet); interactive Card with `role="button"` when `onSelect` is provided.
+- ✓ New [relativeTime util](web/lib/relativeTime.ts) using `Intl.RelativeTimeFormat` — zero new dep, locale-aware ("yesterday" vs "1 day ago"), clamps future dates to "now" (defends against clock-skew).
+- ✓ [InterviewSidebar](web/features/interview/InterviewSidebar.tsx) refactored:
+  - Reads `localStorage[archived_sessions]` on mount (defensive — empty list during SSR + on parse failure, so a corrupt entry doesn't crash the sidebar).
+  - Composes a single chatroom list: live session first, then archives sorted by date desc.
+  - Uses `<ChatroomEntry />` for every row — same component shape that Phase 3f reuses with server data, so the swap is a one-line change to the data source.
+  - Header now shows "N archived" pill when archives exist (with a tooltip explaining the local-storage fallback).
+- ✓ Best-effort title generation for archived entries: parses `options` JSON from the archive doc, builds "<Role> <Style> Interview" from `roleLevel` + `interviewStyle`, falls back to "Past interview".
+
+#### Final verification (2026-04-25)
+
+| Command | Status |
+|---|---|
+| `cd backend && npx tsc --noEmit && npm test` | ✓ 40/40 (BE not touched in 1.6d) |
+| `cd web && npx tsc --noEmit` | ✓ clean |
+| `cd web && npm test -- --ci` | ✓ 39/39 (was 29 — +6 `relativeTime.test.ts` + 4 `ChatroomEntry.test.tsx`) |
+| `cd web && npm run build` | ✓ 6 static routes |
+
+#### Changelog
+
+- **2026-04-25** — New [web/lib/relativeTime.ts](web/lib/relativeTime.ts). Single function `formatRelative(iso, now?)` picking the largest sensible unit from year/month/week/day/hour/minute. `numeric: "auto"` so en-US gets "yesterday" instead of "1 day ago". Tested with 6 cases including malformed input + future timestamp.
+- **2026-04-25** — New [web/components/ChatroomEntry.tsx](web/components/ChatroomEntry.tsx). Exports `ChatroomEntryData` shape so consumers (sidebar today, dashboard later) can build the data layer without coupling to JSX. Active state shown via tinted background + a small primary dot with `aria-label="Active session"`.
+- **2026-04-25** — [InterviewSidebar.tsx](web/features/interview/InterviewSidebar.tsx) refactored. Inline `readArchivedChatrooms()` parses the localStorage archive shape written by [SessionSetupForm](web/features/session-setup/SessionSetupForm.tsx). Hook order: `useEffect` runs after mount → empty list during SSR → archives hydrate on first client render. No hydration mismatch.
+- **2026-04-25** — Tests: new [relativeTime.test.ts](web/lib/relativeTime.test.ts) (6 cases: now / minutes / yesterday / weeks / clamped future / malformed) + new [ChatroomEntry.test.tsx](web/components/ChatroomEntry.test.tsx) (4 cases: title+resume+date render / active indicator / onSelect click / non-interactive when onSelect omitted).
+- **2026-04-25** — FE test count: 29 → 39.
+
+#### Files created
+- [web/lib/relativeTime.ts](web/lib/relativeTime.ts) + [web/lib/relativeTime.test.ts](web/lib/relativeTime.test.ts)
+- [web/components/ChatroomEntry.tsx](web/components/ChatroomEntry.tsx) + [web/components/ChatroomEntry.test.tsx](web/components/ChatroomEntry.test.tsx)
+
+#### Files modified
+- [web/features/interview/InterviewSidebar.tsx](web/features/interview/InterviewSidebar.tsx) — full restructure to use `ChatroomEntry`
+
+#### Notable gotchas
+1. **Hydration**: localStorage isn't available during SSR, so `readArchivedChatrooms()` short-circuits when `window` is undefined. The sidebar's first render matches server output (live entry only); archives appear on the first client effect.
+2. **Stringified-inside-stringified shape**: archive entries store `resume` as a JSON string of `{resumeFileName, resumeContent}`, and `options` as a JSON string of session options. We re-parse both inline. Wrapped in try/catch so a corrupt archive doc shows a fallback title instead of crashing the whole list.
+3. **`Intl.RelativeTimeFormat` numeric: "auto"** behavior: produces "yesterday" / "tomorrow" instead of "1 day ago" / "in 1 day". Tests assert the locale-aware output explicitly so a future locale change is caught.
+4. **Archive entries are non-interactive today**: no server route to load a prior session. When Phase 3 ships `GET /api/sessions/:id/messages`, `<ChatroomEntry onSelect={...}>` lights them up — no JSX change in the entry itself.
+
+#### TODO markers planted
+```ts
+// (none — all forward-references to Phase 3 are documented in JSDoc context, not as TODOs)
+```
 
 ### Phase 1.6 final verification (after 1.6a/b/c shipped)
 

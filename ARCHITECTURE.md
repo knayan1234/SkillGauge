@@ -2,10 +2,10 @@
 
 Living architecture reference. **Update this file in the same commit as any structural change** (new module, new route, new service, phase transition).
 
-**Current phase:** Phase 1.6c complete — `/api/health/info` + FE `LlmBadge` shipped. Phase 1.5 (auth hardening, all five sub-phases) finished 2026-04-25; Phase 1.6 (UI polish) is 3/4 sub-phases done with 1.6d (chatroom sidebar) pending. Next major milestone is Phase 2 (real LLM behind `LLMClient`).
+**Current phase:** Phase 1.6 fully complete (all 4 sub-phases shipped 2026-04-25). Phase 1.5 (auth hardening) also complete. Next major milestone is Phase 2 (real LLM behind `LLMClient`); 2b prompts land first.
 **Last updated:** 2026-04-25
 **Scope of this doc:** Full stack — FE (Next.js) in [web/](web/) and BE (Fastify + MongoDB) in [backend/](backend/). The AI layer is a deterministic stub behind the `LLMClient` interface; swapping to a real provider is Phase 2.
-**Test baseline:** 40 BE + 29 FE = 69 Jest tests, all green. CI runs both suites in parallel.
+**Test baseline:** 40 BE + 39 FE = 79 Jest tests, all green. CI runs both suites in parallel.
 
 ---
 
@@ -1051,11 +1051,11 @@ cd web && npm install && npm run dev                            # :3000
 | &nbsp;&nbsp;1.5c — Auth rate limits + lockout | ✓ done (2026-04-25) | `@fastify/rate-limit` per-IP (10/min) + `login_attempts` per-email (5 fails / 15 min → 423) |
 | &nbsp;&nbsp;1.5d — Session rotation | ✓ done (2026-04-25) | Per-user `jwtEpoch` in JWT payload; `POST /api/auth/logout-all`; password reset bumps epoch |
 | &nbsp;&nbsp;1.5e — Contract cleanup | ✓ done (2026-04-25) | All schemas in `backend/src/shared/contracts.ts`; sessions routes swept to `{code, message}` with 4 new codes |
-| **1.6 — UI polish & visibility** (NEW) | pending | Logout in header, expanded homepage, LLM provider badge, chatroom sidebar foundation |
+| **1.6 — UI polish & visibility** | ✓ done (2026-04-25) | All four sub-phases shipped |
 | &nbsp;&nbsp;1.6a — Auth-aware persistent header w/ logout | ✓ done (2026-04-25) | New `AuthModalProvider` context + `UserMenu` component in both AppLayout and InterviewHeader; landing page CTA auth-aware |
 | &nbsp;&nbsp;1.6b — Expanded homepage | ✓ done (2026-04-25) | 4-section landing: hero / how it works / why different / footer CTA. Auth-aware CTAs in hero AND footer. Static-only |
 | &nbsp;&nbsp;1.6c — Active LLM provider badge | pending | `GET /api/health/info` exposes `{llmProvider, llmModel}`; FE chip in interview header |
-| &nbsp;&nbsp;1.6d — Chatroom sidebar (UI only) | pending | Session list grouped by resume + date, backed by local archive until 3f |
+| &nbsp;&nbsp;1.6d — Chatroom sidebar (UI only) | ✓ done (2026-04-25) | New `ChatroomEntry` + relative-time util; sidebar reads `localStorage[archived_sessions]`, swappable to server data in 3f without JSX changes |
 | **2 — AI intelligence** (sub-parted) | pending | Swap stubClient → real providers behind same `LLMClient` |
 | &nbsp;&nbsp;**2b — Prompt templates + versioning** | pending | **Lands FIRST** in Phase 2 — provider-agnostic `prompts/v1/`, `prompt_version` recorded per message |
 | &nbsp;&nbsp;2a — OpenAI provider | pending | `openaiClient.ts` as a thin adapter around 2b's prompts; timeout/retry, env-gated, mocked-fetch tests |
