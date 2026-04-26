@@ -2,7 +2,7 @@
 
 **Scope:** what you need to install, configure, and run to keep the **backend** (and FE talking to it) stand up locally and in CI. Keep this file in lockstep with [backend/.env.example](backend/.env.example) and [backend/package.json](backend/package.json).
 
-**Last updated:** 2026-04-25 (Phase 2b complete — provider-agnostic prompts shipped; next is Phase 2a/2e adapters in placeholder mode)
+**Last updated:** 2026-04-25 (Phase 2a/2e complete in placeholder mode — adapters committed + tested; next is Phase 2c PDF/DOCX parsing)
 
 ---
 
@@ -55,8 +55,11 @@ All validated by zod in [backend/src/config/env.ts](backend/src/config/env.ts). 
 | `MONGODB_URI` | **yes** | `mongodb://127.0.0.1:27017` | SRV URI for Atlas |
 | `MONGODB_DB` | **yes** | `skillgauge` | isolated DB per env (`skillgauge_dev`, `skillgauge_test`, `skillgauge_prod`) |
 | `LLM_PROVIDER` | **yes** | `stub` | `stub` today. `openai` / `anthropic` land in Phase 2 |
-| `OPENAI_API_KEY` | Phase 2a | — | unused until Phase 2a |
-| `ANTHROPIC_API_KEY` | Phase 2e | — | unused until Phase 2e |
+| `OPENAI_API_KEY` | Required if `LLM_PROVIDER=openai` | — | Sign up at https://platform.openai.com/. See §10 for full instructions |
+| `OPENAI_MODEL` | no | `gpt-4o-mini` | Override to `gpt-4o` for higher quality |
+| `ANTHROPIC_API_KEY` | Required if `LLM_PROVIDER=anthropic` | — | Sign up at https://console.anthropic.com/. See §10 |
+| `ANTHROPIC_MODEL` | no | `claude-sonnet-4-6` | Override to `claude-haiku-4-5-20251001` (cheap) or `claude-opus-4-7` (best) |
+| `LLM_TIMEOUT_MS` | no | `30000` | Per-LLM-call timeout. Generous default; tighten in prod if needed |
 | `JWT_TTL_DAYS` | no | `7` | live since Phase 1.5a — drives both JWT `expiresIn` and cookie `maxAge` |
 | `RESET_TTL_MIN` | no | `30` | live since Phase 1.5b — password reset token lifetime in minutes |
 | `AUTH_RATE_PER_MIN` | no | `10` | live since Phase 1.5c — per-IP requests/min on `/api/auth/login` + reset-request |
@@ -109,7 +112,7 @@ Smoke check:
 ## 6. Keeping it standing — operational checklist
 
 ### Before every commit
-- `cd backend && npx tsc --noEmit && npm test` — 51/51 green
+- `cd backend && npx tsc --noEmit && npm test` — 75/75 green
 - `cd web && npx tsc --noEmit && npm test -- --ci && npm run build` — 39/39 green
 - Do NOT commit `.env` or any file that dumps secrets
 
@@ -158,7 +161,7 @@ These are concrete, low-risk items you should do before touching Phase 1.5 featu
 5. **Wire `backend/.env.example` into the FE `web/README.md`** — currently the two READMEs don't cross-reference each other, and new contributors miss the `CORS_ORIGIN` ↔ `NEXT_PUBLIC_API_BASE_URL` pairing.
 6. **Add a `docker-compose.yml`** at the repo root with a single `mongo` service + named volume. Avoids the `docker run` incantation from §1 and makes teardown `docker compose down` instead of `docker rm`.
 7. **Write a one-page `RUNBOOK.md`** (when we move toward Phase 4 deploy) listing: how to tail logs, how to rotate JWT, how to restart, how to restore from backup, who to page. Stub it now so Phase 4 has a home for the content.
-8. **Start Phase 2a/2e — OpenAI + Anthropic adapter classes (placeholder mode)** once 1–6 land. (Phase 1.5 + Phase 1.6 + Phase 2b all complete on 2026-04-25.) Adapters ship without keys; smoke testing requires either an OpenAI or Anthropic API key — see §10 below for sign-up instructions.
+8. **Start Phase 2c — Resume + JD parsing (PDF + DOCX via `pdf-parse` + `mammoth`)** once 1–6 land. (Phase 1.5, 1.6, 2b, and 2a/2e all complete on 2026-04-25.) Phase 2a/2e shipped both provider adapters in placeholder mode; smoke testing them requires either an OpenAI or Anthropic API key — see §10 below for sign-up instructions.
 
 ---
 
@@ -169,3 +172,54 @@ Update in the same commit as:
 - Any new required external service (Redis, S3, etc.)
 - Any change to the dev-loop commands or ports
 - Any phase transition that alters operational assumptions
+
+---
+
+## 10. How to get an LLM API key
+
+Both OpenAI and Anthropic adapters ship in the codebase as of Phase 2a/2e. Pick one provider — the app will work with either via the `LLM_PROVIDER` env. Until a key is configured, `LLM_PROVIDER=stub` (the default) keeps the deterministic stub running so local dev never blocks on this step.
+
+### Option A — Anthropic Claude (recommended)
+
+Recommended because the project's `gradeAnswer` uses Claude's tool-call shape natively, and Claude's verbose feedback explanations are what users want for interview prep.
+
+1. Go to **https://console.anthropic.com/** and sign up (free trial credits, ~$5).
+2. **Settings → Billing** → add a card. Trial credits cover dev; production volume needs funded balance.
+3. **Settings → API Keys → Create Key**. Name it `skillgauge-dev`. Copy the key (starts with `sk-ant-...`).
+4. In [backend/.env](backend/.env) set:
+   ```
+   LLM_PROVIDER=anthropic
+   ANTHROPIC_API_KEY=sk-ant-...
+   ANTHROPIC_MODEL=claude-sonnet-4-6
+   ```
+   Other model options: `claude-haiku-4-5-20251001` (cheapest), `claude-opus-4-7` (best quality).
+5. Restart the backend (`cd backend && npm run dev`). The LlmBadge in the interview header auto-flips from `🤖 stub` to `🤖 anthropic · claude-sonnet-4-6`.
+
+### Option B — OpenAI
+
+1. Go to **https://platform.openai.com/signup** and sign up.
+2. **Billing → Payment methods → Add credit balance** (minimum $5).
+3. **API keys → + Create new secret key**. Name it `skillgauge-dev`. Copy the key (starts with `sk-...`).
+4. In [backend/.env](backend/.env) set:
+   ```
+   LLM_PROVIDER=openai
+   OPENAI_API_KEY=sk-...
+   OPENAI_MODEL=gpt-4o-mini
+   ```
+   Other model options: `gpt-4o` (better, more expensive), `gpt-4-turbo` (legacy).
+5. Restart the backend. The LlmBadge auto-flips to `🤖 openai · gpt-4o-mini`.
+
+### Failure modes (and how the BE tells you about them)
+
+| What | What you see |
+|---|---|
+| `LLM_PROVIDER=openai` but `OPENAI_API_KEY` missing | BE fails to BOOT with: `LLM_PROVIDER=openai but OPENAI_API_KEY is not set. Add the key to backend/.env or switch LLM_PROVIDER back to 'stub'.` |
+| Same for `anthropic` | Equivalent error message |
+| Bad API key (auth failure on first request) | 401 from the provider → adapter rejects without retry → request returns 503; BE pino log includes the provider's error |
+| Provider 5xx / network timeout | One automatic retry after 500 ms; if still failing, request returns 503 |
+
+### Cost-control reminders
+
+- Phase 2d (next sub-phase after parsing) adds per-user daily token quota + input-length guards.
+- For dev, both providers' lowest-tier models (`gpt-4o-mini` / `claude-haiku-4-5`) cost ~$0.001 per interview question. Even heavy usage stays under $1/day at one user.
+- Production cost monitoring is Phase 4d (observability) — not yet shipped.

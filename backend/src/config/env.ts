@@ -31,8 +31,16 @@ const schema = z.object({
   MONGODB_URI: z.string().default("mongodb://127.0.0.1:27017"),
   MONGODB_DB: z.string().default("skillgauge"),
   LLM_PROVIDER: z.enum(["stub", "openai", "anthropic"]).default("stub"),
+  // Real-provider configuration. All optional at the schema level — the factory in
+  // `src/llm/index.ts` enforces "key required when provider selects this adapter" with
+  // a clear startup error so a missing key fails fast instead of silently falling back.
   OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().default("gpt-4o-mini"),
   ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_MODEL: z.string().default("claude-sonnet-4-6"),
+  // Per-call timeout for real LLM requests (ms). Default 30s — generous enough for hard
+  // questions on slower models, tight enough that a stuck provider doesn't pin a request.
+  LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 });
 
 // Dev default keeps `npm run dev` working without a .env file. Production MUST set JWT_SECRET.

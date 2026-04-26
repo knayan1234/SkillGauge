@@ -2,9 +2,10 @@
 
 Living document tracking every change made during the end-to-end build. Newest entries at the top within each phase.
 
-**Current phase:** Phase 2b — Provider-agnostic prompt templates v1 **(COMPLETE ✓)** (new `backend/src/llm/prompts/v1/` with `renderGenerateQuestion` + `renderGradeAnswer` + `gradeResponseSchema` + `PROMPT_VERSION` constant; `messages` collection records `promptVersion` on every question + feedback; stub renders prompts in CI for shape-bug detection)
-**Next phase:** Phase 2a/2e — OpenAI + Anthropic adapter classes in placeholder mode (no API key required to ship; key required to smoke-test)
-**Then:** 2c PDF/DOCX parsing → 2d cost guards → Phase 3 long-term memory + chatroom sidebar (real data) → Phase 4 production
+**Current phase:** Phase 2a/2e — OpenAI + Anthropic adapters **(COMPLETE ✓ — placeholder mode)** (both adapter classes shipped + tested with mocked SDKs; factory throws clear startup error when provider selected without its key; LlmBadge auto-displays the model name once a key is configured)
+**Next phase:** Phase 2c — Resume + JD parsing (PDF + DOCX via `pdf-parse` + `mammoth`)
+**Then:** 2d cost guards → Phase 3 long-term memory + chatroom sidebar (real data) → Phase 4 production
+**Awaiting input from user:** OpenAI **OR** Anthropic API key to smoke-test against a real model. See [requirements.md §10](requirements.md) for sign-up instructions. App keeps working with `LLM_PROVIDER=stub` indefinitely; switching to a real provider is one env change once a key is in `.env`.
 **Started:** 2026-04-18
 **Phase 0a finished:** 2026-04-18
 **Phase 0b finished:** 2026-04-19
@@ -20,6 +21,7 @@ Living document tracking every change made during the end-to-end build. Newest e
 **Phase 1.6c finished:** 2026-04-25
 **Phase 1.6d finished:** 2026-04-25 (Phase 1.6 fully complete)
 **Phase 2b finished:** 2026-04-25
+**Phase 2a/2e finished:** 2026-04-25 (placeholder mode — adapter classes committed + tested; smoke test pending key)
 
 ---
 
@@ -966,13 +968,77 @@ These are visibility/UX items the user will demo to non-technical reviewers befo
 
 Each sub-phase is a self-contained PR. `stubClient` keeps working at every step so `main` is never broken.
 
-### 2a — OpenAI provider behind `LLMClient` (depends on 2b prompts existing)
-- [ ] `backend/src/llm/openaiClient.ts` implementing `LLMClient` — imports prompts from 2b
-- [ ] Factory switch on `LLM_PROVIDER=openai` (FE badge from Phase 1.6c flips automatically once env changes)
-- [ ] Env: `OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-4o-mini`)
-- [ ] Timeout + single retry on transient 5xx
-- [ ] Unit test with mocked `fetch` (no real calls in CI)
-- **External credentials needed:** OpenAI API key.
+### 2a / 2e — OpenAI + Anthropic adapters ✓ (placeholder mode)
+
+#### Goals
+- ✓ [backend/src/llm/openaiClient.ts](backend/src/llm/openaiClient.ts) — `OpenAILLMClient` implementing `LLMClient`. Thin wrapper around the `openai` SDK; uses v1 prompts from 2b. JSON-mode for grading; `.parse()` with `gradeResponseSchema` enforces shape.
+- ✓ [backend/src/llm/anthropicClient.ts](backend/src/llm/anthropicClient.ts) — `AnthropicLLMClient` mirrors the OpenAI shape using `@anthropic-ai/sdk`. System message at top level (Anthropic convention); structured grading via tool-call (`tool_choice: { type: "tool", name: "submit_grade" }`).
+- ✓ Factory ([backend/src/llm/index.ts](backend/src/llm/index.ts)) switches on `LLM_PROVIDER`. Throws a clear, actionable error at construction time when a real provider is selected without its key — BE fails to BOOT loudly instead of 500-ing on the first interview request.
+- ✓ Both adapters: timeout from `LLM_TIMEOUT_MS` env (default 30s), `maxRetries: 0` at the SDK level, custom retry-once-on-transient (5xx / 408 / 429 / `ECONN*` / "timeout" string match) at our layer. 4xx errors bubble immediately because they're prompt bugs, not flake.
+- ✓ [/api/health/info](backend/src/modules/health/health.routes.ts) populates `llmModel` from `OPENAI_MODEL` / `ANTHROPIC_MODEL`. The Phase 1.6c FE LlmBadge already reads this — it auto-flips from `🤖 stub` to `🤖 openai · gpt-4o-mini` (or anthropic equivalent) the moment env changes, with no FE code touched.
+- ✓ Unit tests for both adapters with mocked SDKs (`jest.mock("openai")` / `jest.mock("@anthropic-ai/sdk")`). Plus a factory test that exercises the placeholder-mode contract: stub always works, real providers throw without keys, real providers construct correctly with keys.
+
+**Why "placeholder mode"**: the user doesn't have OpenAI/Anthropic keys yet. The adapter code is fully written, fully tested (against mocked SDKs), and shipped. With `LLM_PROVIDER=stub` (the default), neither real adapter is instantiated — dev workflows without keys keep working. The moment a key is dropped in `.env` and `LLM_PROVIDER` flipped, the corresponding adapter activates.
+
+**External credentials needed (to smoke-test the real path):** see [requirements.md §10](requirements.md) for OpenAI + Anthropic sign-up + key-creation steps.
+
+#### Final verification (2026-04-25)
+
+| Command | Status |
+|---|---|
+| `cd backend && npx tsc --noEmit` | ✓ clean |
+| `cd backend && npm test` | ✓ 75/75 (was 51 — +9 OpenAI, +10 Anthropic, +5 factory) |
+| `cd backend && npm run build` | ✓ `dist/` emits both adapter classes |
+| `cd web && npx tsc --noEmit && npm test -- --ci` | ✓ 39/39 (no FE change in 2a/2e — LlmBadge already forward-compat) |
+
+#### New env vars
+
+| Var | Default | Required? |
+|---|---|---|
+| `OPENAI_API_KEY` | (unset) | Required if `LLM_PROVIDER=openai` |
+| `OPENAI_MODEL` | `gpt-4o-mini` | No |
+| `ANTHROPIC_API_KEY` | (unset) | Required if `LLM_PROVIDER=anthropic` |
+| `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | No |
+| `LLM_TIMEOUT_MS` | `30000` | No |
+
+#### Changelog
+
+- **2026-04-25** — `npm install --save openai @anthropic-ai/sdk` (2 new deps).
+- **2026-04-25** — New [openaiClient.ts](backend/src/llm/openaiClient.ts). `chat.completions.create` with `response_format: { type: "json_object" }` for grading; plain text for question generation. Wrapping-quote stripping on questions because some models add `"..."` despite "no quotes" instructions in the system prompt.
+- **2026-04-25** — New [anthropicClient.ts](backend/src/llm/anthropicClient.ts). `messages.create` with `system` at top level + `messages: [{role: "user", content: <user>}]`. Grading via a `submit_grade` tool with structured `input_schema` matching `gradeResponseSchema`; `tool_choice: { type: "tool", name: "submit_grade" }` forces the model to use it. Extract the `tool_use` block from the response, validate input with the v1 zod schema before mapping to `GradedAnswer`.
+- **2026-04-25** — Factory [llm/index.ts](backend/src/llm/index.ts) checks for the provider's key and throws an actionable error at construction time. Error message tells the user exactly which env to set or to flip back to `stub`.
+- **2026-04-25** — [health.routes.ts](backend/src/modules/health/health.routes.ts) populates `llmModel` from per-provider env. The FE [LlmBadge](web/components/LlmBadge.tsx) already handles a non-null `llmModel` (Phase 1.6c forward-compat), so the badge auto-renders the real model name with no FE change.
+- **2026-04-25** — New tests:
+  - [openaiClient.test.ts](backend/tests/openaiClient.test.ts) — 9 cases: construction, generateQuestion (quote stripping + correct payload), gradeAnswer (parse + JSON-mode + zod rejection), retry (5xx / 4xx-no-retry / ECONNRESET).
+  - [anthropicClient.test.ts](backend/tests/anthropicClient.test.ts) — 10 cases: construction, generateQuestion (text block + system-at-top-level + empty-fallback), gradeAnswer (tool extraction + tool_choice + missing tool / zod rejection), retry (5xx / 4xx-no-retry).
+  - [llmFactory.test.ts](backend/tests/llmFactory.test.ts) — 5 cases: stub returns stubClient; openai/anthropic without key throw; openai/anthropic with key construct the right adapter class.
+- **2026-04-25** — Backend test count: 51 → 75.
+
+#### Files created
+- [backend/src/llm/openaiClient.ts](backend/src/llm/openaiClient.ts)
+- [backend/src/llm/anthropicClient.ts](backend/src/llm/anthropicClient.ts)
+- [backend/tests/openaiClient.test.ts](backend/tests/openaiClient.test.ts)
+- [backend/tests/anthropicClient.test.ts](backend/tests/anthropicClient.test.ts)
+- [backend/tests/llmFactory.test.ts](backend/tests/llmFactory.test.ts)
+
+#### Files modified
+- [backend/package.json](backend/package.json) — `+ openai`, `+ @anthropic-ai/sdk`
+- [backend/src/config/env.ts](backend/src/config/env.ts) — `OPENAI_MODEL`, `ANTHROPIC_MODEL`, `LLM_TIMEOUT_MS`
+- [backend/.env.example](backend/.env.example) — same with sign-up URLs as comments
+- [backend/src/llm/index.ts](backend/src/llm/index.ts) — factory dispatches by `LLM_PROVIDER` with key validation
+- [backend/src/modules/health/health.routes.ts](backend/src/modules/health/health.routes.ts) — `llmModel` populated from per-provider env
+
+#### Notable gotchas
+1. **JSON-mode is not schema enforcement**: OpenAI's `response_format: { type: "json_object" }` only guarantees parseable JSON, not field presence. We parse with the v1 zod schema after — without that, a model that returns `{"score": "ten"}` would persist as a corrupt feedback row.
+2. **Anthropic doesn't have JSON-mode**: we use a forced tool call (`tool_choice: { type: "tool", name: "submit_grade" }`) for the same shape guarantee. The tool's `input_schema` is the JSON-Schema mirror of `gradeResponseSchema`. Drift between the two is a code smell — both are in-source so a search catches them.
+3. **Wrapping-quote stripping**: real models (especially the smaller ones) wrap question text in quotes despite system-prompt instructions. We strip a leading/trailing `"` to keep the chat bubble clean.
+4. **Retry policy diverges from SDK defaults**: both SDKs ship with `maxRetries` defaults that hide intermittent failures behind invisible retries. We set `maxRetries: 0` and own the retry layer ourselves (one transient retry, fail fast on 4xx). Easier to reason about + log.
+5. **Factory throws at construction, not first use**: this is intentional. `createLLMClient()` is called once at module load in `sessions.service.ts`. If a real provider is misconfigured, the BE fails to boot — no chance of serving 500s on the first interview. Trade-off: a typo in `OPENAI_API_KEY` blocks all routes (including auth), not just `/api/sessions`. Acceptable because the dev sees the error in their terminal immediately.
+
+#### TODO markers planted
+```ts
+// (none — all forward-references are documented in JSDoc context)
+```
 
 ### 2b — Prompt templates + versioning ✓
 
@@ -1042,11 +1108,12 @@ Every question + feedback message persists `promptVersion`. When v2 prompts ship
 - [ ] Short-circuit abusive input length before calling the LLM
 - [ ] 402/429 distinct error codes in response
 
-### 2e — Alternate provider (Anthropic) + regression suite
-- [ ] `anthropicClient.ts` against same interface
-- [ ] Switch test: set `LLM_PROVIDER=anthropic` in CI shadow-job, ensure interview flow still passes
-- [ ] Snapshot-style regression tests over golden prompts (low temperature)
-- **External credentials needed:** Anthropic API key (CI can skip if absent).
+### 2e — Anthropic regression suite (folded into 2a/2e placeholder commit)
+
+The Anthropic adapter shipped alongside OpenAI in the 2a/2e placeholder-mode commit (see above). Remaining 2e work:
+- [ ] CI shadow-job that runs the interview flow against `LLM_PROVIDER=anthropic` when an `ANTHROPIC_API_KEY` is configured as a CI secret. Skip-if-absent gate so the workflow stays green for forks without keys.
+- [ ] Snapshot-style regression tests over golden answers at temperature 0 — both providers should converge on similar scores for canned answer/question pairs. Exposes prompt drift between providers.
+- **External credentials needed:** Anthropic API key as a CI secret. Skip if absent.
 
 **Exit criteria for Phase 2:** all sub-phases green; FE contract unchanged; `LLM_PROVIDER=stub` still works for local dev and tests.
 

@@ -2,10 +2,10 @@
 
 Living architecture reference. **Update this file in the same commit as any structural change** (new module, new route, new service, phase transition).
 
-**Current phase:** Phase 2b complete — provider-agnostic v1 prompt templates shipped. Phase 1.5 + 1.6 both fully complete. Next: Phase 2a/2e adapter classes in placeholder mode (no API key required to ship; key required to smoke-test).
+**Current phase:** Phase 2a/2e complete in placeholder mode — both `OpenAILLMClient` and `AnthropicLLMClient` adapter classes shipped + tested with mocked SDKs. Phase 1.5 + 1.6 + 2b all fully complete. Next: Phase 2c (PDF + DOCX parsing). Smoke-testing against a real LLM provider needs an API key in `.env`; see [requirements.md §10](requirements.md).
 **Last updated:** 2026-04-25
-**Scope of this doc:** Full stack — FE (Next.js) in [web/](web/) and BE (Fastify + MongoDB) in [backend/](backend/). The AI layer is a deterministic stub behind the `LLMClient` interface; provider-agnostic v1 prompts ship in `backend/src/llm/prompts/v1/`. Real OpenAI/Anthropic adapters slot in next without changing prompts or service code.
-**Test baseline:** 51 BE + 39 FE = 90 Jest tests, all green. CI runs both suites in parallel.
+**Scope of this doc:** Full stack — FE (Next.js) in [web/](web/) and BE (Fastify + MongoDB) in [backend/](backend/). The AI layer ships three implementations of `LLMClient`: a deterministic `stubClient` (default), an `OpenAILLMClient`, and an `AnthropicLLMClient`. All three consume the same v1 prompts in `backend/src/llm/prompts/v1/`.
+**Test baseline:** 75 BE + 39 FE = 114 Jest tests, all green. CI runs both suites in parallel.
 
 ---
 
@@ -716,10 +716,84 @@ interface LLMClient {
 }
 ```
 
-- **Phase 1.1 (today):** `stubClient` holds three question banks — `BEHAVIORAL_QUESTIONS` (10), `TECHNICAL_QUESTIONS_BY_DIFFICULTY` (10 per difficulty × 3), and a `mixed` interleave of behavioral + the chosen technical bank. Technical + mixed prompts receive a `ROLE_SUFFIX` tail based on `roleLevel` ("Explain the trade-offs…", "How would you mentor the team…"). Scoring is a length proxy whose divisor scales with difficulty (easy=10, medium=15, hard=25). No network, no key, fully deterministic.
-- **Phase 2:** `openaiClient` / `anthropicClient` implement the same interface. Service code (`sessions.service.ts`) does not change — the enriched `QuestionContext` already carries `interviewStyle`, `difficulty`, `roleLevel`, `focusAreas`, so the real provider can reconstruct the prompt directly. The factory ([llm/index.ts](backend/src/llm/index.ts)) switches on `LLM_PROVIDER` env.
+Three implementations ship today, all interchangeable via the `LLM_PROVIDER` env:
 
-This is the **AI integration seam**. Real prompts, rate limiting, and cost tracking all live behind the interface so the rest of the codebase stays provider-agnostic.
+### 10.1 `stubClient` — deterministic default
+
+`backend/src/llm/stubClient.ts`. Three question banks — `BEHAVIORAL_QUESTIONS` (10), `TECHNICAL_QUESTIONS_BY_DIFFICULTY` (10 per difficulty × 3), and a `mixed` interleave. Technical + mixed prompts get a `ROLE_SUFFIX` tail based on `roleLevel`. Scoring is a length proxy with a difficulty-scaled divisor (easy=10, medium=15, hard=25). No network, no key. Always available — used in tests and as the local-dev default.
+
+The stub also calls `renderGenerateQuestion(ctx)` and `renderGradeAnswer(q, a, ctx)` and discards the rendered strings. This exercises the v1 prompt-template path on every CI run, so a future enum addition that misses `shared.ts` mappings fails loudly with a clear stack trace instead of waiting for a real provider to hit it.
+
+### 10.2 `OpenAILLMClient` — `backend/src/llm/openaiClient.ts`
+
+Thin wrapper around the official `openai` SDK + the v1 prompts from §10.4. Maps prompt output to OpenAI's chat-completions shape:
+
+```ts
+sdk.chat.completions.create({
+  model: env.OPENAI_MODEL,
+  messages: [{ role: "system", content: system }, { role: "user", content: user }],
+  // grading only:
+  response_format: { type: "json_object" },
+})
+```
+
+JSON-mode is enforced for grading; question generation is plain text. We then `.parse()` the model's JSON with `gradeResponseSchema` — JSON-mode only guarantees parseable JSON, not that fields exist or fall in the right ranges, so the zod parse is the real shape gate.
+
+### 10.3 `AnthropicLLMClient` — `backend/src/llm/anthropicClient.ts`
+
+Mirrors OpenAI structurally but uses Claude-native conventions: `system` is a top-level parameter (not a message), and structured grading uses a forced tool call:
+
+```ts
+sdk.messages.create({
+  model: env.ANTHROPIC_MODEL,
+  system,                                            // top-level
+  messages: [{ role: "user", content: user }],
+  // grading only:
+  tools: [GRADE_TOOL_SCHEMA],                        // mirrors gradeResponseSchema
+  tool_choice: { type: "tool", name: "submit_grade" },
+})
+```
+
+We extract the `tool_use` block from `message.content` and validate its `input` with `gradeResponseSchema`. `tool_choice` forces the model to call the grading tool — no risk of getting a free-form text reply we'd then have to JSON-parse.
+
+### 10.4 v1 prompts (Phase 2b)
+
+Both real adapters consume the SAME v1 renderers from `backend/src/llm/prompts/v1/`. Exports:
+- `renderGenerateQuestion(ctx) → { system, user }`
+- `renderGradeAnswer(q, a, ctx) → { system, user, responseSchema }`
+- `gradeResponseSchema` — zod shape (`content`, `score: 1-10`, `strengths[1-5]`, `improvements[0-5]`)
+- `PROMPT_VERSION = "v1"` — recorded on every persisted question + feedback message
+
+Token-budget aware: résumé truncated to 4000 chars, JD to 2000, recent answers capped at 3.
+
+### 10.5 Construction lifecycle + placeholder mode
+
+[llm/index.ts](backend/src/llm/index.ts) is the factory. Service code (`sessions.service.ts`) calls `createLLMClient()` once at module load and stores the singleton. The factory:
+
+| `LLM_PROVIDER` | `*_API_KEY` set? | Result |
+|---|---|---|
+| `stub` (default) | irrelevant | Returns `stubClient` — always works |
+| `openai` | yes | Constructs `OpenAILLMClient` with `apiKey`, `model`, `timeout` |
+| `openai` | **no** | **Throws** `LLM_PROVIDER=openai but OPENAI_API_KEY is not set...` — BE fails to BOOT |
+| `anthropic` | yes | Constructs `AnthropicLLMClient` |
+| `anthropic` | **no** | **Throws** equivalent error |
+
+This is the "placeholder mode" pattern — real adapter classes are committed and compile-checked, but only instantiated when their key is present AND the provider is selected. Dev workflows without keys keep working with the stub; flipping `LLM_PROVIDER` in `.env` activates the real adapter.
+
+### 10.6 Retry + timeout policy
+
+Both real adapters wrap each SDK call in `callWithRetry`:
+- One retry on transient: HTTP 5xx, 408, 429, or `Error.message` matching `ECONN*` / "timeout".
+- No retry on permanent: 4xx other than 408/429 (almost always a prompt bug).
+- 500 ms delay between attempts. Exponential backoff is overkill at one retry.
+
+SDK-level `maxRetries: 0` so retries don't happen invisibly inside the SDK — we own the policy and log every transient.
+
+### 10.7 What the FE sees
+
+The interview header's [LlmBadge](web/components/LlmBadge.tsx) reads `GET /api/health/info` once on mount. Today it shows `🤖 stub` (the default); the moment ops drops a key in `.env` and flips `LLM_PROVIDER`, the next page load shows e.g. `🤖 anthropic · claude-sonnet-4-6`. Zero FE code change required for the swap — the badge already handles the populated-`llmModel` case.
+
+This is the **AI integration seam**. Provider-specific bits (SDK shape, retry semantics, structured-output mechanism) live inside the adapter. Everything outside — prompts, persistence, request/response contracts, the FE — is provider-agnostic.
 
 ---
 
@@ -1058,10 +1132,10 @@ cd web && npm install && npm run dev                            # :3000
 | &nbsp;&nbsp;1.6d — Chatroom sidebar (UI only) | ✓ done (2026-04-25) | New `ChatroomEntry` + relative-time util; sidebar reads `localStorage[archived_sessions]`, swappable to server data in 3f without JSX changes |
 | **2 — AI intelligence** (sub-parted) | pending | Swap stubClient → real providers behind same `LLMClient` |
 | &nbsp;&nbsp;**2b — Prompt templates + versioning** | ✓ done (2026-04-25) | Provider-agnostic `backend/src/llm/prompts/v1/`; `PROMPT_VERSION` constant; `messages.promptVersion` field; `gradeResponseSchema` zod for structured-output validation; stub exercises renderers in CI |
-| &nbsp;&nbsp;2a — OpenAI provider | pending | `openaiClient.ts` as a thin adapter around 2b's prompts; timeout/retry, env-gated, mocked-fetch tests |
+| &nbsp;&nbsp;2a — OpenAI provider | ✓ done (2026-04-25, placeholder mode) | `OpenAILLMClient` thin adapter around 2b's prompts; JSON-mode for grading; one-retry on transient; mocked-SDK tests; needs key to smoke-test |
 | &nbsp;&nbsp;2c — Resume + JD parsing | pending | PDF + DOCX → text via `pdf-parse` / `mammoth`; chunk + normalize |
 | &nbsp;&nbsp;2d — Cost + rate guards | pending | Per-user token quota; 402/429 codes |
-| &nbsp;&nbsp;2e — Anthropic provider + regression | pending | Second provider; shadow CI job; golden-prompt snapshots |
+| &nbsp;&nbsp;2e — Anthropic provider + regression | ✓ partial (2026-04-25) | `AnthropicLLMClient` adapter shipped alongside OpenAI in placeholder mode (tool-call grading); shadow CI job + golden-prompt regression tests still pending |
 | 3 — Long-term memory + chatroom sidebar + dashboard | pending | Vector search, real `GET /api/sessions` powering chatroom UI, full transcript hydration, `/dashboard` — sub-parted when 2 ships |
 | 4 — Production readiness | pending | E2E, observability, security headers, deploy — sub-parted when 3 ships |
 

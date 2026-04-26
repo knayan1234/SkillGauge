@@ -24,12 +24,17 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
   // Exposes the active LLM provider so the FE can show a "🤖 stub" / "🤖 openai" /
   // "🤖 anthropic" badge in the interview header.
   //
-  // `llmModel` is null when LLM_PROVIDER=stub (the stub has no concept of a model).
-  // Real providers populate it from their per-provider env vars (e.g. OPENAI_MODEL,
-  // ANTHROPIC_MODEL) so the badge shows e.g. "🤖 openai · gpt-4o-mini" with no FE
-  // change required.
-  app.get("/api/health/info", async () => ({
-    llmProvider: env.LLM_PROVIDER,
-    llmModel: null as string | null,
-  }));
+  // `llmModel` is null when LLM_PROVIDER=stub (the stub has no concept of a model);
+  // populated from the matching per-provider env (`OPENAI_MODEL` / `ANTHROPIC_MODEL`)
+  // when a real provider is active, so the badge auto-renders e.g.
+  // "🤖 openai · gpt-4o-mini" the moment ops drops in a key.
+  app.get("/api/health/info", async () => {
+    let llmModel: string | null = null;
+    if (env.LLM_PROVIDER === "openai") llmModel = env.OPENAI_MODEL;
+    else if (env.LLM_PROVIDER === "anthropic") llmModel = env.ANTHROPIC_MODEL;
+    return {
+      llmProvider: env.LLM_PROVIDER,
+      llmModel,
+    };
+  });
 }
