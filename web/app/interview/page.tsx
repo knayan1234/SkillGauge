@@ -51,10 +51,14 @@ export default function InterviewPage() {
         return;
       }
 
-      // Setup form wrote { resumeFileName, resumeContent } as JSON so the interview page
-      // can POST /api/sessions with the real resume bytes. Bad JSON = setup-form bug,
-      // safer to bounce back than render a broken interview.
-      let parsed: { resumeFileName: string; resumeContent: string };
+      // Setup form wrote { resumeFileName, resumeContent (base64), resumeMime } as JSON
+      // so the interview page can POST /api/sessions with the real resume bytes. Bad
+      // JSON = setup-form bug, safer to bounce back than render a broken interview.
+      let parsed: {
+        resumeFileName: string;
+        resumeContent: string;
+        resumeMime?: string;
+      };
       let options: SessionOptions;
       try {
         parsed = JSON.parse(resumePayload);
@@ -68,6 +72,9 @@ export default function InterviewPage() {
       initializeSession({
         resumeFileName: parsed.resumeFileName,
         resumeContent: parsed.resumeContent,
+        // Defensive default for archived/legacy entries that pre-date the resumeMime
+        // field. The BE falls back to UTF-8 decode on unknown MIMEs.
+        resumeMime: parsed.resumeMime ?? "application/octet-stream",
         jobDescription,
         ...options,
       });
@@ -112,6 +119,9 @@ export default function InterviewPage() {
         <InterviewSidebar
           sessionTitle={session.title}
           resumeFileName={resumeFileName}
+          // BE returns the parsed plain text on session init (post-2c). We display it
+          // in the "View résumé" dialog so users see what the LLM is grading against.
+          resumeContent={session.resumeContent ?? null}
           isActive={!isComplete}
         />
       }

@@ -2,10 +2,10 @@
 
 Living architecture reference. **Update this file in the same commit as any structural change** (new module, new route, new service, phase transition).
 
-**Current phase:** Phase 2a/2e complete in placeholder mode — both `OpenAILLMClient` and `AnthropicLLMClient` adapter classes shipped + tested with mocked SDKs. Phase 1.5 + 1.6 + 2b all fully complete. Next: Phase 2c (PDF + DOCX parsing). Smoke-testing against a real LLM provider needs an API key in `.env`; see [requirements.md §10](requirements.md).
+**Current phase:** Phase 2c complete — PDF + DOCX parsing wired via `pdf-parse` + `mammoth`. Phase 1.5 + 1.6 + 2b + 2a/2e + 2c all done. Only Phase 2d (cost guards) remains in Phase 2. Smoke-testing real LLM providers needs an API key in `.env`; see [requirements.md §10](requirements.md).
 **Last updated:** 2026-04-25
-**Scope of this doc:** Full stack — FE (Next.js) in [web/](web/) and BE (Fastify + MongoDB) in [backend/](backend/). The AI layer ships three implementations of `LLMClient`: a deterministic `stubClient` (default), an `OpenAILLMClient`, and an `AnthropicLLMClient`. All three consume the same v1 prompts in `backend/src/llm/prompts/v1/`.
-**Test baseline:** 75 BE + 39 FE = 114 Jest tests, all green. CI runs both suites in parallel.
+**Scope of this doc:** Full stack — FE (Next.js) in [web/](web/) and BE (Fastify + MongoDB) in [backend/](backend/). The AI layer ships three implementations of `LLMClient`: a deterministic `stubClient` (default), an `OpenAILLMClient`, and an `AnthropicLLMClient`. All three consume the same v1 prompts in `backend/src/llm/prompts/v1/`. Resume ingestion (PDF/DOCX/text) lives in `backend/src/modules/sessions/ingest.ts`.
+**Test baseline:** 88 BE + 39 FE = 127 Jest tests, all green. CI runs both suites in parallel.
 
 ---
 
@@ -893,68 +893,66 @@ sequenceDiagram
   IP->>U: "Interview Complete" card
 ```
 
-### 13.1 How resume ingestion works today (Phase 1.1)
+### 13.1 Resume ingestion (Phase 2c — real parsing)
 
-This is the most-asked-about flow because the file types we *accept* (`PDF` / `DOC` / `DOCX`) don't match what we actually *do* with them today. Here's the truth, end-to-end.
+End-to-end flow from the user's file picker to the persisted parsed text.
 
 **(a) FE picks the file** ([SessionSetupForm.tsx](web/features/session-setup/SessionSetupForm.tsx) + [sessionSetupSchema.ts](web/features/session-setup/sessionSetupSchema.ts)):
 - The `<input type="file">` has `accept` set to `ACCEPTED_RESUME_ACCEPT_ATTR` — `.pdf, .doc, .docx, application/pdf, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document`. The browser filters the file picker.
-- zod re-validates after pick: `MIME ∈ ACCEPTED_RESUME_TYPES` AND `size ≤ 5 MB`. Anything else fails the form.
+- zod re-validates after pick: `MIME ∈ ACCEPTED_RESUME_TYPES` AND `size ≤ 5 MB`.
 
-**(b) FE extracts "text"** (same form, `readFileAsText` helper):
+**(b) FE encodes the bytes** (`readFileAsBase64` in the same form):
 ```ts
-const reader = new FileReader();
-reader.readAsText(file);
-const resumeContent: string = await new Promise((res) => reader.onload = () => res(reader.result));
+const buf = await file.arrayBuffer();           // raw bytes via FileReader.readAsArrayBuffer
+const base64 = chunkedBtoa(new Uint8Array(buf)); // 0x8000-byte chunks to avoid stack overflow
+const resumeMime = file.type;                    // e.g. "application/pdf"
 ```
-**This is the catch.** `FileReader.readAsText` decodes the file's bytes as UTF-8 *regardless of format*. For a `.txt` resume, you get clean text. For a `.docx` (which is a zip of XML), you get binary-looking gibberish. For a `.pdf` (postscript-like binary), same gibberish. We accept all three formats by extension but only `.txt`-shaped content is actually readable downstream.
+Chunked `btoa` is required because `String.fromCharCode(...bytes)` blows the call stack on files larger than ~256 KB.
 
-This is intentional Phase-1 scaffolding — the wire contract is correct (the BE receives a `resumeContent: string`), so when Phase 2c slots a real parser in, no upstream code changes.
-
-**(c) FE stashes for handoff** (sessionStorage, not the BE yet):
+**(c) FE stashes for handoff** (sessionStorage):
 ```js
 sessionStorage.setItem(STORAGE_KEYS.session.id,
-  JSON.stringify({ resumeFileName, resumeContent }));
+  JSON.stringify({ resumeFileName, resumeContent: base64, resumeMime }));
 sessionStorage.setItem(STORAGE_KEYS.session.jobDescription, jobDescription);
 sessionStorage.setItem(STORAGE_KEYS.session.options,
   JSON.stringify({ interviewStyle, difficulty, roleLevel, questionCount, focusAreas }));
 sessionStorage.setItem(STORAGE_KEYS.session.active, "1");
 ```
-sessionStorage (not localStorage) — survives a refresh of the same tab but dies when the tab closes. The four keys are namespaced via [`STORAGE_KEYS`](web/lib/storageKeys.ts) (Phase 1 audit fix #1 — no more magic strings).
+The four keys are namespaced via [`STORAGE_KEYS`](web/lib/storageKeys.ts).
 
-**(d) /interview page picks it up and posts to BE** ([web/app/interview/page.tsx](web/app/interview/page.tsx)):
+**(d) /interview page POSTs to BE** ([web/app/interview/page.tsx](web/app/interview/page.tsx)):
 ```ts
-const { resumeFileName, resumeContent } = JSON.parse(sessionStorage.getItem(STORAGE_KEYS.session.id)!);
-const jobDescription = sessionStorage.getItem(STORAGE_KEYS.session.jobDescription)!;
-const options = JSON.parse(sessionStorage.getItem(STORAGE_KEYS.session.options)!);
-await initializeSession({ resumeFileName, resumeContent, jobDescription, ...options });
+await initializeSession({ resumeFileName, resumeContent: base64, resumeMime, ...rest });
 ```
-This is the *only* path from setup → interview. No magic redirect with the file in flight; the file's text payload travels via sessionStorage between two route changes on the same origin.
 
-**(e) BE persists raw, doesn't parse** ([sessions.service.ts](backend/src/modules/sessions/sessions.service.ts) + [sessions repo](backend/src/db/repos/sessions.ts)):
-- The session document gets `resumeContent` stored verbatim as a Mongo string field.
-- `stubClient.generateQuestion(ctx)` does NOT use `resumeContent` today — questions come from canned banks indexed by `interviewStyle` + `difficulty` + `questionIndex`. The resume bytes are dead weight at the moment, parked in Mongo until Phase 2 onwards.
+**(e) BE parses + persists plain text** ([sessions.service.ts](backend/src/modules/sessions/sessions.service.ts) + [ingest.ts](backend/src/modules/sessions/ingest.ts)):
+- `parseResume({contentBase64, mime, fileName})` runs FIRST on session init. Dispatches by MIME:
+  - `application/pdf` → `pdf-parse` extracts text via the embedded PDF.js layer
+  - `application/vnd.openxmlformats-officedocument.wordprocessingml.document` → `mammoth.extractRawText`
+  - `application/msword` (legacy .doc) → throws `UNSUPPORTED_MIME` → 415 to the client
+  - `text/*` and any unknown MIME → graceful UTF-8 decode
+- Failures throw `ResumeParseError` which the route maps to `400 RESUME_PARSE_FAILED` or `415 UNSUPPORTED_RESUME_MIME`.
+- The session document gets `resumeContent` stored as the **extracted plain text**. Original bytes are discarded.
+- Length cap: parsed output truncated to `MAX_PARSED_LENGTH` (10 MB) as a defense against malicious uploads.
 
-**(f) Resume preview in sidebar** ([InterviewSidebar.tsx](web/features/interview/InterviewSidebar.tsx)):
-- Shows `resumeFileName` plus a "View" button that opens a Radix dialog with the raw `resumeContent` text. **For PDF/DOCX uploads, the dialog shows binary noise.** That's a Phase 1.1 known UX gap, deliberately not fixed here because Phase 2c rewrites this same code path with parsed text.
+**(f) BE returns parsed text on the session response** so the FE doesn't need to re-fetch:
+```ts
+{ session: { id, title, ..., resumeContent: <parsed plain text>, resumeFileName }, firstQuestion }
+```
 
-**(g) Resume swap mid-session** ([SessionSetupForm.tsx](web/features/session-setup/SessionSetupForm.tsx)):
+**(g) Resume preview in sidebar** ([InterviewSidebar.tsx](web/features/interview/InterviewSidebar.tsx)):
+- The "View résumé" dialog reads `session.resumeContent` directly — no re-parse, no sessionStorage round-trip. PDFs and DOCXs now render as readable text.
+
+**(h) Resume swap mid-session** ([SessionSetupForm.tsx](web/features/session-setup/SessionSetupForm.tsx)):
 - If `STORAGE_KEYS.session.active === "1"` when the form is submitted, a confirm dialog opens.
-- On confirm, the *prior* setup blob (`{resume, jobDescription, options}`) is pushed into a `localStorage[archived_sessions]` array before the new one overwrites sessionStorage. The actual session + messages on the BE are untouched — Phase 3's `GET /api/sessions` list endpoint will surface them properly. Until then the local archive is a safety net so mid-interview swaps don't silently lose context.
+- On confirm, the *prior* setup blob (`{resume, jobDescription, options}`) is pushed into a `localStorage[archived_sessions]` array before the new one overwrites sessionStorage. The actual session + messages on the BE are untouched — `GET /api/sessions` (Phase 3) will surface them as real chatroom rows. The local archive is the bridge.
 
-### 13.2 Phase 2c plan (real resume parsing)
+### 13.2 What 2c deliberately did NOT do
 
-The seam is clean — only one BE module needs to change.
-
-**Files that will be added/changed:**
-- New: `backend/src/modules/sessions/ingest.ts` — parser dispatch by MIME, returns plain text + metadata.
-- New: dependencies `pdf-parse` (PDF → text) and `mammoth` (DOCX → text). Both are pure-JS, no native build → Windows-safe.
-- Modified: [sessions.service.ts](backend/src/modules/sessions/sessions.service.ts) — `initialize()` calls `ingest.parseResume(resumeContent, mimeType)` before persisting; the persisted `resumeContent` becomes the *parsed* text, not raw bytes.
-- The FE wire contract doesn't change. The BE shifts from "trust whatever string the FE sent" to "validate-and-normalize before storing."
-
-**What changes for the user:** the sidebar's "View resume" dialog finally shows readable text for PDF/DOCX. The future real LLM gets clean prompt material, not binary noise.
-
-**What 2c deliberately doesn't do:** no object-storage of the original file (S3/R2) — that's Phase 4d. The original bytes are discarded after parsing. We only keep the extracted text.
+- **No object-storage of original bytes** — bytes are discarded after parsing. Re-deriving the original PDF from text is impossible, but we don't need it: the LLM prompt only ever sees the text. Phase 4d may add S3/R2 if we want to keep the original artifact.
+- **No legacy .doc support** — mammoth only handles `.docx`. Adding `antiword` or `textract` brings native build complexity. The 415 message asks the user to re-export.
+- **No JD parsing** — the JD is already plain text from a `<textarea>`. Phase 4 may add support for "paste a job-description URL we'll fetch and clean," but that's a different feature.
+- **No chunking for the LLM prompt** — `prompts/v1` already truncates résumé content to 4000 chars at prompt-render time. Phase 3 (vector retrieval) will replace the truncation with semantic retrieval.
 
 ---
 
@@ -1133,7 +1131,7 @@ cd web && npm install && npm run dev                            # :3000
 | **2 — AI intelligence** (sub-parted) | pending | Swap stubClient → real providers behind same `LLMClient` |
 | &nbsp;&nbsp;**2b — Prompt templates + versioning** | ✓ done (2026-04-25) | Provider-agnostic `backend/src/llm/prompts/v1/`; `PROMPT_VERSION` constant; `messages.promptVersion` field; `gradeResponseSchema` zod for structured-output validation; stub exercises renderers in CI |
 | &nbsp;&nbsp;2a — OpenAI provider | ✓ done (2026-04-25, placeholder mode) | `OpenAILLMClient` thin adapter around 2b's prompts; JSON-mode for grading; one-retry on transient; mocked-SDK tests; needs key to smoke-test |
-| &nbsp;&nbsp;2c — Resume + JD parsing | pending | PDF + DOCX → text via `pdf-parse` / `mammoth`; chunk + normalize |
+| &nbsp;&nbsp;2c — Resume + JD parsing | ✓ done (2026-04-25) | `pdf-parse@^1.x` + `mammoth` dispatched by MIME; FE sends base64; persisted `resumeContent` is parsed plain text; new RESUME_PARSE_FAILED + UNSUPPORTED_RESUME_MIME codes |
 | &nbsp;&nbsp;2d — Cost + rate guards | pending | Per-user token quota; 402/429 codes |
 | &nbsp;&nbsp;2e — Anthropic provider + regression | ✓ partial (2026-04-25) | `AnthropicLLMClient` adapter shipped alongside OpenAI in placeholder mode (tool-call grading); shadow CI job + golden-prompt regression tests still pending |
 | 3 — Long-term memory + chatroom sidebar + dashboard | pending | Vector search, real `GET /api/sessions` powering chatroom UI, full transcript hydration, `/dashboard` — sub-parted when 2 ships |

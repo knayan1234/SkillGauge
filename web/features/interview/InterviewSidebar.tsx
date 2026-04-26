@@ -55,6 +55,12 @@ import { STORAGE_KEYS } from "@/lib/storageKeys";
 interface InterviewSidebarProps {
   sessionTitle: string;
   resumeFileName: string | null;
+  /**
+   * Parsed plain-text résumé content from the BE session response. Displayed in the
+   * "View résumé" dialog. Optional because legacy archived sessions (pre-parsing) may
+   * not have it — those entries show "Resume content not available." instead.
+   */
+  resumeContent: string | null;
   isActive: boolean;
 }
 
@@ -130,6 +136,7 @@ function readArchivedChatrooms(): ChatroomEntryData[] {
 export function InterviewSidebar({
   sessionTitle,
   resumeFileName,
+  resumeContent,
   isActive,
 }: InterviewSidebarProps) {
   const router = useRouter();
@@ -169,17 +176,6 @@ export function InterviewSidebar({
     setConfirmLeave(false);
     router.push("/");
   };
-
-  const resumeContent = (() => {
-    if (typeof window === "undefined") return "";
-    const raw = sessionStorage.getItem(STORAGE_KEYS.session.id);
-    if (!raw) return "";
-    try {
-      return (JSON.parse(raw) as { resumeContent?: string }).resumeContent ?? "";
-    } catch {
-      return "";
-    }
-  })();
 
   return (
     <div className="h-full flex flex-col p-4">

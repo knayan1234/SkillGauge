@@ -2,10 +2,10 @@
 
 Living document tracking every change made during the end-to-end build. Newest entries at the top within each phase.
 
-**Current phase:** Phase 2a/2e — OpenAI + Anthropic adapters **(COMPLETE ✓ — placeholder mode)** (both adapter classes shipped + tested with mocked SDKs; factory throws clear startup error when provider selected without its key; LlmBadge auto-displays the model name once a key is configured)
-**Next phase:** Phase 2c — Resume + JD parsing (PDF + DOCX via `pdf-parse` + `mammoth`)
-**Then:** 2d cost guards → Phase 3 long-term memory + chatroom sidebar (real data) → Phase 4 production
-**Awaiting input from user:** OpenAI **OR** Anthropic API key to smoke-test against a real model. See [requirements.md §10](requirements.md) for sign-up instructions. App keeps working with `LLM_PROVIDER=stub` indefinitely; switching to a real provider is one env change once a key is in `.env`.
+**Current phase:** Phase 2c — Resume + JD parsing **(COMPLETE ✓)** (PDF + DOCX → text via `pdf-parse` + `mammoth`; FE sends base64 + MIME, BE dispatches to the right parser; sidebar "View résumé" dialog now shows readable text for all formats; new `RESUME_PARSE_FAILED` (400) + `UNSUPPORTED_RESUME_MIME` (415) error codes)
+**Next phase:** Phase 2d — Cost + rate guards (per-user daily token quota + input-length guard)
+**Then:** Phase 3 long-term memory + chatroom sidebar (real data) → Phase 4 production
+**Awaiting input from user (for Phase 2 smoke test against a real LLM):** OpenAI **OR** Anthropic API key. See [requirements.md §10](requirements.md). App keeps working with `LLM_PROVIDER=stub` indefinitely.
 **Started:** 2026-04-18
 **Phase 0a finished:** 2026-04-18
 **Phase 0b finished:** 2026-04-19
@@ -22,6 +22,7 @@ Living document tracking every change made during the end-to-end build. Newest e
 **Phase 1.6d finished:** 2026-04-25 (Phase 1.6 fully complete)
 **Phase 2b finished:** 2026-04-25
 **Phase 2a/2e finished:** 2026-04-25 (placeholder mode — adapter classes committed + tested; smoke test pending key)
+**Phase 2c finished:** 2026-04-25
 
 ---
 
@@ -1097,11 +1098,68 @@ Every question + feedback message persists `promptVersion`. When v2 prompts ship
 3. **Token-budget mindfulness**: résumé truncated to 4000 chars, JD to 2000, prior-answers summary capped at 3 most recent. Total prompt size stays well under typical 8K context windows even with verbose résumés.
 4. **Stub renders + discards**: trade-off — wastes ~1ms per call to render strings the stub doesn't use. Worth it because every BE test now exercises the prompt path; a future enum addition that breaks `shared.ts` ROLE_DESCRIPTION mapping fails immediately with a clear stack trace, not silently in production.
 
-### 2c — Resume + JD parsing
-- [ ] PDF parser (`pdf-parse` or similar) + DOCX parser (`mammoth`) → plain text
-- [ ] Chunk + normalize pipeline in `backend/src/modules/sessions/ingest.ts`
-- [ ] Replace raw `resumeContent` write with parsed+normalized text
-- [ ] Tests with fixture files
+### 2c — Resume + JD parsing ✓
+
+#### Goals
+- ✓ New [backend/src/modules/sessions/ingest.ts](backend/src/modules/sessions/ingest.ts) with `parseResume({contentBase64, mime, fileName})`. Dispatches by MIME: `application/pdf` → `pdf-parse`, the DOCX MIME → `mammoth.extractRawText`, `application/msword` → rejected (legacy .doc isn't parseable by mammoth), text/* and unknown MIMEs → graceful UTF-8 fallback.
+- ✓ FE [SessionSetupForm](web/features/session-setup/SessionSetupForm.tsx) switched from `readAsText` to `readAsArrayBuffer` + chunked base64 encoding. Adds `resumeMime` from `file.type` (with `application/octet-stream` fallback for unknown types).
+- ✓ Wire contract: `initSessionSchema` gains required `resumeMime`. The persisted `SessionDoc.resumeContent` is now the EXTRACTED PLAIN TEXT (post-parse), not raw base64. Original bytes are discarded after parsing.
+- ✓ `Session` API response gains `resumeContent` + `resumeFileName` so the sidebar's "View résumé" dialog renders parsed text directly — no second endpoint, no client-side parsing.
+- ✓ Two new error codes: `RESUME_PARSE_FAILED` (400) for parse exceptions / empty content / bad base64; `UNSUPPORTED_RESUME_MIME` (415) for legacy .doc.
+- ✓ Length cap: parsed output truncated to `MAX_PARSED_LENGTH` (10MB) to defend against malicious uploads.
+
+#### Final verification (2026-04-25)
+
+| Command | Status |
+|---|---|
+| `cd backend && npx tsc --noEmit` | ✓ clean |
+| `cd backend && npm test` | ✓ 88/88 (was 75 — +11 ingest cases + 2 sessions error-code cases) |
+| `cd backend && npm run build` | ✓ `dist/` emitted |
+| `cd web && npx tsc --noEmit && npm test -- --ci` | ✓ 39/39 (no FE behavior regression — buildRequest test fixture updated for `resumeMime`) |
+| `cd web && npm run build` | ✓ 6 static routes |
+
+#### Changelog
+
+- **2026-04-25** — `npm install --save pdf-parse@^1.1.1 mammoth` (2 new deps). `pdf-parse@2.x` ships a complex pdfjs-dist-style API; we pin `^1.1.1` for the simple `pdfParse(buffer) → {text}` shape. `@types/pdf-parse` added as a dev dep.
+- **2026-04-25** — New [backend/src/modules/sessions/ingest.ts](backend/src/modules/sessions/ingest.ts) — `parseResume`, `ResumeParseError`, `MAX_PARSED_LENGTH` constant.
+- **2026-04-25** — [contracts.ts](backend/src/shared/contracts.ts) `initSessionSchema` adds required `resumeMime: z.string().min(1).max(255)`.
+- **2026-04-25** — [shared/types.ts](backend/src/shared/types.ts) `SessionInitRequest` + `Session` shapes updated. `Session` gains optional `resumeContent` + `resumeFileName`.
+- **2026-04-25** — [sessions.service.ts](backend/src/modules/sessions/sessions.service.ts) `initialize()` calls `parseResume()` BEFORE persisting; throws `SessionError("RESUME_PARSE_FAILED" | "UNSUPPORTED_RESUME_MIME")` on parser failure. The route catches via the existing `statusForSessionError` / `codeForSessionError` helpers.
+- **2026-04-25** — [SessionSetupForm.tsx](web/features/session-setup/SessionSetupForm.tsx) `readFileAsBase64` replaces `readFileAsText`. Chunked encoding (0x8000 bytes/chunk) via `String.fromCharCode` + `btoa` to avoid stack overflows on big files. `resumeMime` added to the sessionStorage handoff blob.
+- **2026-04-25** — [interview/page.tsx](web/app/interview/page.tsx) reads `resumeMime` from sessionStorage (with fallback to `application/octet-stream` for legacy archives) and forwards to `initializeSession`. Passes `session.resumeContent` to `<InterviewSidebar />`.
+- **2026-04-25** — [InterviewSidebar.tsx](web/features/interview/InterviewSidebar.tsx) gains required `resumeContent` prop. Removed the inline sessionStorage-base64 read — the dialog now displays the BE-parsed text directly.
+- **2026-04-25** — Tests: new [ingest.test.ts](backend/tests/ingest.test.ts) (11 cases: text decode, PDF dispatch, DOCX dispatch, unsupported MIME, empty content, length cap, parser exception wrapping, unknown-MIME fallback). Updated [sessions.test.ts](backend/tests/sessions.test.ts) `baseInitPayload` to base64 + `resumeMime`; added 2 cases for the new error codes. Updated [useSession.test.tsx](web/hooks/useSession.test.tsx) `buildRequest` fixture.
+- **2026-04-25** — Backend test count: 75 → 88. FE stable at 39 (fixture update only).
+
+#### Files created
+- [backend/src/modules/sessions/ingest.ts](backend/src/modules/sessions/ingest.ts)
+- [backend/tests/ingest.test.ts](backend/tests/ingest.test.ts)
+
+#### Files modified
+- [backend/package.json](backend/package.json) — `+ pdf-parse@^1.1.1`, `+ mammoth`, `+ @types/pdf-parse` (dev)
+- [backend/src/shared/contracts.ts](backend/src/shared/contracts.ts) — `resumeMime` field
+- [backend/src/shared/types.ts](backend/src/shared/types.ts) — `SessionInitRequest.resumeMime` + `Session.resumeContent` / `Session.resumeFileName`
+- [backend/src/modules/sessions/sessions.service.ts](backend/src/modules/sessions/sessions.service.ts) — `parseResume` call + new SessionError codes
+- [backend/src/modules/sessions/sessions.routes.ts](backend/src/modules/sessions/sessions.routes.ts) — try/catch on init route + status/code helpers updated
+- [backend/tests/sessions.test.ts](backend/tests/sessions.test.ts) — payload uses base64; +2 error-code tests
+- [web/features/session-setup/SessionSetupForm.tsx](web/features/session-setup/SessionSetupForm.tsx) — `readFileAsBase64` + `resumeMime`
+- [web/app/interview/page.tsx](web/app/interview/page.tsx) — forward `resumeMime`; pass `session.resumeContent` to sidebar
+- [web/features/interview/InterviewSidebar.tsx](web/features/interview/InterviewSidebar.tsx) — `resumeContent` prop replaces sessionStorage read
+- [web/services/api.ts](web/services/api.ts) — `Session.resumeContent` + `SessionInitRequest.resumeMime`
+- [web/hooks/useSession.test.tsx](web/hooks/useSession.test.tsx) — fixture update
+
+#### Notable gotchas
+1. **`pdf-parse@^1.1.1` not @2.x**: v2 was a major API rewrite with a pdfjs-style `loadDocument` → `getText` shape. We pin v1 for the simple callable export. If v1 ever goes unmaintained, `pdfreader` and `pdf2json` are alternatives; both have similarly-shaped APIs that would be one-line swaps in `parseResume`.
+2. **Chunked btoa() encoding**: a naive `btoa(String.fromCharCode(...bytes))` blows the call stack on files larger than ~256KB. Chunking at 0x8000 bytes is the conventional fix.
+3. **`resumeContent` semantic shift**: pre-2c it was raw text (or binary noise for PDFs); post-2c it's parsed plain text. The persisted column name didn't change — anything reading it gets the BETTER value automatically. New sessions get readable text; old sessions in Atlas keep whatever was stored.
+4. **Legacy .doc rejection**: mammoth only handles `.docx` (XML zip). Legacy `.doc` (binary OLE format) needs a separate native-built parser like `antiword`. Rejecting with a clear "save as .docx or PDF" message is better UX than crashing or returning garbage.
+5. **Length cap is post-parse**: a 200-page PDF that extracts to 30MB of text would otherwise blow up our prompt budget. The cap matches the wire-side `resumeContent` zod max (10MB), so a malicious upload can't exceed what we'd accept on the wire anyway.
+6. **`Session.resumeContent` returned via the API**: the parsed text travels back to the FE on session init so the sidebar can show it. Trade-off: bigger response payload. Mitigation: only on init (one-shot), not on every question fetch. A future optimization could add a separate `GET /api/sessions/:id/resume` endpoint.
+
+#### TODO markers planted
+```ts
+// (none — flow complete; legacy .doc support could land later via antiword if demand exists)
+```
 
 ### 2d — Cost + rate guards
 - [ ] Per-user daily token/call quota (Mongo counter doc, TTL-reset)

@@ -14,9 +14,15 @@ async function registerAndGetCookie(
   return res.headers["set-cookie"] as string;
 }
 
+// Plain-text payload (base64 of UTF-8) so the BE's parser falls through the text
+// branch and persists the decoded string. Real PDF / DOCX bytes are exercised in
+// `ingest.test.ts` against mocked parsers.
+const RESUME_PLAINTEXT = "resume text content here";
+const RESUME_BASE64 = Buffer.from(RESUME_PLAINTEXT, "utf8").toString("base64");
 const baseInitPayload = {
-  resumeFileName: "resume.pdf",
-  resumeContent: "resume text content here",
+  resumeFileName: "resume.txt",
+  resumeContent: RESUME_BASE64,
+  resumeMime: "text/plain",
   jobDescription:
     "We are hiring a senior software engineer with 5+ years of experience building distributed systems",
   interviewStyle: "mixed" as const,
@@ -147,6 +153,36 @@ describe("session routes", () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe("INVALID_FORMAT");
+  });
+
+  it("rejects a legacy .doc résumé with UNSUPPORTED_RESUME_MIME (415)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/sessions",
+      headers: { cookie },
+      payload: {
+        ...baseInitPayload,
+        resumeMime: "application/msword",
+        resumeFileName: "old.doc",
+      },
+    });
+    expect(res.statusCode).toBe(415);
+    expect(res.json().code).toBe("UNSUPPORTED_RESUME_MIME");
+  });
+
+  it("rejects an empty résumé payload with RESUME_PARSE_FAILED (400)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/sessions",
+      headers: { cookie },
+      payload: {
+        ...baseInitPayload,
+        resumeContent: Buffer.from("   \n   ", "utf8").toString("base64"),
+        resumeMime: "text/plain",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("RESUME_PARSE_FAILED");
   });
 
   it("rejects unsupported interview style with INVALID_FORMAT (400)", async () => {

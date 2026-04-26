@@ -20,6 +20,10 @@ export interface Session {
   totalQuestions: number;
   status: "active" | "completed";
   createdAt: string;
+  // Parsed plain-text résumé content the BE extracted on session init. Used by the
+  // sidebar "View résumé" dialog to display the text the LLM is grading against.
+  resumeContent?: string;
+  resumeFileName?: string;
 }
 
 export interface Message {
@@ -49,7 +53,10 @@ export interface SessionOptions {
 
 export interface SessionInitRequest extends SessionOptions {
   resumeFileName: string;
+  // Base64-encoded raw file bytes. The BE base64-decodes and dispatches to a parser
+  // (pdf-parse / mammoth / UTF-8 fallback) based on resumeMime.
   resumeContent: string;
+  resumeMime: string;
   jobDescription: string;
 }
 

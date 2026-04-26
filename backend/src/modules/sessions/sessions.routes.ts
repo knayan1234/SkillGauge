@@ -2,14 +2,16 @@
  * Routes for the interview-session lifecycle.
  *
  * Schemas come from `@/shared/contracts` (single source of truth) and every error
- * response uses the project-wide `{code, message}` shape. The 5 distinct error codes
- * here let the FE branch on machine-readable identifiers instead of parsing strings:
- *   - INVALID_FORMAT         (400) — zod parse failure on body or :index path param
- *   - SESSION_NOT_FOUND      (404) — id doesn't resolve to a session, or its current
- *                                    question slot is missing (corrupt state)
- *   - SESSION_FORBIDDEN      (403) — session belongs to another user
- *   - SESSION_COMPLETED      (409) — caller tried to submit an answer after isComplete
- *   - SESSION_INDEX_MISMATCH (409) — caller asked for question N but session is on M
+ * response uses the project-wide `{code, message}` shape. The error codes here let
+ * the FE branch on machine-readable identifiers instead of parsing strings:
+ *   - INVALID_FORMAT             (400) — zod parse failure on body or :index path param
+ *   - RESUME_PARSE_FAILED        (400) — uploaded résumé bytes couldn't be decoded
+ *   - UNSUPPORTED_RESUME_MIME    (415) — résumé MIME isn't one we can parse
+ *   - SESSION_NOT_FOUND          (404) — id doesn't resolve to a session, or its current
+ *                                        question slot is missing (corrupt state)
+ *   - SESSION_FORBIDDEN          (403) — session belongs to another user
+ *   - SESSION_COMPLETED          (409) — caller tried to submit an answer after isComplete
+ *   - SESSION_INDEX_MISMATCH     (409) — caller asked for question N but session is on M
  */
 
 import type { FastifyInstance } from "fastify";
@@ -30,11 +32,20 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         message: "Invalid session request",
       });
     }
-    const result = await sessionsService.initialize(
-      request.userId!,
-      parsed.data,
-    );
-    return reply.code(201).send(result);
+    try {
+      const result = await sessionsService.initialize(
+        request.userId!,
+        parsed.data,
+      );
+      return reply.code(201).send(result);
+    } catch (err) {
+      if (err instanceof SessionError) {
+        return reply
+          .code(statusForSessionError(err.code))
+          .send({ code: codeForSessionError(err.code), message: err.message });
+      }
+      throw err;
+    }
   });
 
   app.get<{ Params: { id: string; index: string } }>(
@@ -105,6 +116,12 @@ function statusForSessionError(code: SessionError["code"]): number {
     case "ALREADY_COMPLETE":
     case "INDEX_MISMATCH":
       return 409;
+    case "RESUME_PARSE_FAILED":
+      return 400;
+    case "UNSUPPORTED_RESUME_MIME":
+      // 415 Unsupported Media Type — semantically right; lets the FE branch and
+      // surface "your file format isn't supported" rather than a generic 400.
+      return 415;
   }
 }
 
@@ -122,5 +139,9 @@ function codeForSessionError(code: SessionError["code"]): string {
       return "SESSION_COMPLETED";
     case "INDEX_MISMATCH":
       return "SESSION_INDEX_MISMATCH";
+    case "RESUME_PARSE_FAILED":
+      return "RESUME_PARSE_FAILED";
+    case "UNSUPPORTED_RESUME_MIME":
+      return "UNSUPPORTED_RESUME_MIME";
   }
 }

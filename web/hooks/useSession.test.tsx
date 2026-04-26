@@ -52,6 +52,7 @@ function makeMessage(
 const buildRequest = () => ({
   resumeFileName: "resume.pdf",
   resumeContent: "sample content",
+  resumeMime: "text/plain",
   jobDescription: "We are hiring a senior engineer with lots of experience",
   interviewStyle: "mixed" as const,
   difficulty: "medium" as const,

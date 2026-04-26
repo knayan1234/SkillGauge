@@ -29,21 +29,36 @@ import {
 } from "./sessionSetupSchema";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
 
-// Reading a file as text is enough for the current stubbed LLM (no parsing needed).
-// A future iteration will move this to a multipart upload endpoint that stores the
-// binary server-side.
-async function readFileAsText(file: File): Promise<string> {
+// Read the file as raw bytes and base64-encode for transport. The BE then dispatches
+// to pdf-parse / mammoth / UTF-8 fallback based on `resumeMime`. We use ArrayBuffer
+// + chunked btoa() (rather than reader.readAsDataURL) so we can return ONLY the
+// base64 payload — no MIME prefix the server would have to strip.
+async function readFileAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onload = () => {
+      const buffer = reader.result as ArrayBuffer;
+      // Chunked encoding to avoid "Maximum call stack" on big files. 0x8000 bytes per
+      // chunk is the conventional safe size for String.fromCharCode + spread.
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(
+          ...bytes.subarray(i, i + chunkSize),
+        );
+      }
+      resolve(btoa(binary));
+    };
     reader.onerror = () => reject(reader.error);
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   });
 }
 
 type PendingSubmit = {
   resumeFileName: string;
   resumeContent: string;
+  resumeMime: string;
   jobDescription: string;
   interviewStyle: SessionSetupFormValues["interviewStyle"];
   difficulty: SessionSetupFormValues["difficulty"];
@@ -61,6 +76,7 @@ function persistAndGo(data: PendingSubmit, router: { push: (p: string) => void }
     JSON.stringify({
       resumeFileName: data.resumeFileName,
       resumeContent: data.resumeContent,
+      resumeMime: data.resumeMime,
     }),
   );
   sessionStorage.setItem(
@@ -119,10 +135,15 @@ export function SessionSetupForm() {
 
   const onSubmit = handleSubmit(async (values) => {
     const file = values.resume[0];
-    const resumeContent = await readFileAsText(file);
+    const resumeContent = await readFileAsBase64(file);
     const payload: PendingSubmit = {
       resumeFileName: file.name,
       resumeContent,
+      // Some browsers report empty `file.type` for unusual extensions. Default to
+      // application/octet-stream — the BE's parseResume falls back to UTF-8 decode
+      // for unknown MIMEs, which keeps the path open for plain-text files even
+      // when the browser declines to identify them.
+      resumeMime: file.type || "application/octet-stream",
       jobDescription: values.jobDescription,
       interviewStyle: values.interviewStyle,
       difficulty: values.difficulty,

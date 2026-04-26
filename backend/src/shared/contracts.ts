@@ -74,16 +74,18 @@ export type RoleLevel = (typeof ROLE_LEVELS)[number];
 
 // Mirrors web/features/session-setup/sessionSetupSchema.ts for the *payload shape* (NOT
 // the file-validation rules — those stay on the FE because the BE never sees the raw
-// File object, only the FileReader-extracted text).
+// File object, only the base64-encoded bytes).
 //
-// 10MB cap on resumeContent is a soft DoS guard; with FileReader.readAsText the FE
-// already validates ≤5MB at the input layer.
-//
-// TODO: rename `resumeContent` → `resumeContentBase64` and add `resumeMime` field once
-// we wire `pdf-parse` + `mammoth`. Bump request schema version then.
+// `resumeContent` carries the raw file as a base64 string; `resumeMime` tells the BE
+// which parser to dispatch to (pdf-parse for PDFs, mammoth for .docx, plain UTF-8 for
+// text/*). 10MB cap on the base64 string is a soft DoS guard; FE already validates
+// ≤5MB at the input layer (base64 inflates ~33% so 10MB encoded ~= 7.5MB raw).
 export const initSessionSchema = z.object({
   resumeFileName: z.string().min(1).max(255),
   resumeContent: z.string().min(1).max(10_000_000),
+  // MIME from the browser's File.type. Validated as a non-empty string only — the
+  // ingest layer enforces "supported MIME" semantics with structured error codes.
+  resumeMime: z.string().min(1).max(255),
   jobDescription: z.string().trim().min(50).max(10_000),
   interviewStyle: z.enum(INTERVIEW_STYLES),
   difficulty: z.enum(DIFFICULTY_LEVELS),

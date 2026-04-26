@@ -4,6 +4,7 @@ import { messagesRepo, type MessageDoc } from "@/db/repos/messages";
 import { createLLMClient } from "@/llm/index";
 import { PROMPT_VERSION } from "@/llm/prompts/v1";
 import type { Session, Message, SessionInitRequest } from "@/shared/types";
+import { parseResume, ResumeParseError } from "./ingest";
 
 export class SessionError extends Error {
   constructor(
@@ -11,7 +12,12 @@ export class SessionError extends Error {
       | "NOT_FOUND"
       | "FORBIDDEN"
       | "ALREADY_COMPLETE"
-      | "INDEX_MISMATCH",
+      | "INDEX_MISMATCH"
+      // Resume parsing failure — surfaced from sessions.routes as 400 RESUME_PARSE_FAILED
+      // / 415 UNSUPPORTED_MIME so the FE can show a specific "we couldn't read your
+      // resume" message instead of a generic error.
+      | "RESUME_PARSE_FAILED"
+      | "UNSUPPORTED_RESUME_MIME",
     message: string,
   ) {
     super(message);
@@ -28,6 +34,10 @@ function toApiSession(doc: SessionDoc): Session {
     totalQuestions: doc.totalQuestions,
     status: doc.status,
     createdAt: doc.createdAt,
+    // Parsed text (post-2c). Cheap to include — the FE displays it in the resume
+    // preview dialog without having to fetch a second endpoint.
+    resumeContent: doc.resumeContent,
+    resumeFileName: doc.resumeFileName,
   };
 }
 
@@ -92,6 +102,27 @@ export const sessionsService = {
     userId: string,
     request: SessionInitRequest,
   ): Promise<{ session: Session; firstQuestion: Message }> {
+    // Parse the uploaded resume up front so the persisted resumeContent is the EXTRACTED
+    // PLAIN TEXT, not raw base64 bytes. Downstream consumers (LLM prompts, sidebar
+    // preview dialog) can rely on it being human-readable text without re-parsing.
+    let parsedResume: string;
+    try {
+      parsedResume = await parseResume({
+        contentBase64: request.resumeContent,
+        mime: request.resumeMime,
+        fileName: request.resumeFileName,
+      });
+    } catch (err) {
+      if (err instanceof ResumeParseError) {
+        const code =
+          err.code === "UNSUPPORTED_MIME"
+            ? "UNSUPPORTED_RESUME_MIME"
+            : "RESUME_PARSE_FAILED";
+        throw new SessionError(code, err.message);
+      }
+      throw err;
+    }
+
     const now = new Date().toISOString();
     const sessionDoc: SessionDoc = {
       _id: randomUUID(),
@@ -101,7 +132,7 @@ export const sessionsService = {
       totalQuestions: request.questionCount,
       status: "active",
       resumeFileName: request.resumeFileName,
-      resumeContent: request.resumeContent,
+      resumeContent: parsedResume,
       jobDescription: request.jobDescription,
       interviewStyle: request.interviewStyle,
       difficulty: request.difficulty,
