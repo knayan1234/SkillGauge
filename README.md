@@ -57,7 +57,7 @@ SkillGauge:
 
 ## High-Level Architecture
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for system diagrams, FE module map, route table, and entry points. That file is updated on every structural change.
+(to be formally written soon)
 
 ---
 
