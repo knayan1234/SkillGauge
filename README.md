@@ -61,18 +61,11 @@ SkillGauge:
 
 ---
 
-## Running the app
+<img width="1921" height="1048" alt="image" src="https://github.com/user-attachments/assets/66fabec8-ce81-4e15-9b82-33475899fe1d" />
+<img width="1921" height="1048" alt="image" src="https://github.com/user-attachments/assets/56a13576-1234-4392-bf57-69881d6a9710" />
+<img width="1921" height="920" alt="image" src="https://github.com/user-attachments/assets/cf4630da-0b18-4006-82f9-7c9f8ca7d5b1" />
+<img width="1921" height="920" alt="image" src="https://github.com/user-attachments/assets/8f864aa3-ae3e-4fe7-8405-20d9cbcc4499" />
 
-```bash
-cd web
-npm install
-npm run dev       # http://localhost:3000
-npm test          # Jest (20 unit tests)
-npm run build     # production build
-```
 
----
 
-## Project Status
 
-SkillGauge is an actively developed personal project with plans for public deployment.
