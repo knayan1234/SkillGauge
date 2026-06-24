@@ -64,15 +64,17 @@ export const passwordResetService = {
     });
 
     const link = `/reset?token=${plainToken}`;
-    // Send the reset link by email. Best-effort: a mail failure must not break the opaque
-    // 200 the route returns, nor reveal whether the email is registered. Mailer is "log" by
-    // default (logs the link); set MAIL_PROVIDER=smtp + SMTP_* + APP_URL to actually send.
-    try {
-      await getMailer().sendPasswordReset(email, `${env.APP_URL}${link}`);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error("[mail] password-reset send failed:", err);
-    }
+    // FIRE-AND-FORGET — do NOT await the email. Blocking the response on SMTP means a slow
+    // or unreachable mail server times out the whole request (504 at the gateway). The token
+    // is already persisted and the route returns an opaque 200 regardless, so the send is a
+    // background side effect. Render is a long-lived process, so the promise still completes
+    // after we return. Failures are logged, never surfaced.
+    void getMailer()
+      .sendPasswordReset(email, `${env.APP_URL}${link}`)
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error("[mail] password-reset send failed:", err);
+      });
     return { link };
   },
 

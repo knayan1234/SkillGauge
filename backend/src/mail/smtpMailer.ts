@@ -14,6 +14,11 @@ export function createSmtpMailer(): MailerClient {
     port: env.SMTP_PORT,
     secure: env.SMTP_PORT === 465,
     auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+    // Fail fast instead of hanging if the SMTP host is slow or unreachable (some hosts
+    // throttle outbound SMTP). Keeps the background send from dangling indefinitely.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
   });
 
   return {
