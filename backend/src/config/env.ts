@@ -71,11 +71,14 @@ const schema = z.object({
   // "log" (default — logs the link, no send) or "smtp" (Nodemailer → any SMTP, e.g. Brevo).
   // The mailer factory falls back to "log" if smtp is selected without SMTP_* creds, so a
   // misconfiguration never breaks the reset flow — it just doesn't send.
-  MAIL_PROVIDER: z.enum(["log", "smtp"]).default("log"),
+  MAIL_PROVIDER: z.enum(["log", "smtp", "brevo"]).default("log"),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+  // Brevo HTTP API key (xkeysib-...) — used when MAIL_PROVIDER=brevo. Sends over HTTPS
+  // (443) instead of SMTP ports, which PaaS hosts often block. Distinct from the SMTP key.
+  BREVO_API_KEY: z.string().optional(),
   // From-address on outgoing mail — must be a verified sender on your SMTP provider
   // (e.g. Brevo → Senders), or the provider rejects the send.
   MAIL_FROM: z.string().default("SkillGauge <no-reply@skillgauge.app>"),
