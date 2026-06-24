@@ -98,15 +98,12 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
       // Modal closes on success, so a top-right toast is the only confirmation surface
       // the user has between submit and the /setup redirect. Keep the inline error path
       // for failures — inside the still-open modal, inline is more visible than a toast.
-      toast.success(
-        mode === "login" ? "Signed in" : "Account created",
-        {
-          description:
-            mode === "login"
-              ? "Welcome back — let's pick up where you left off."
-              : "Your interview prep workspace is ready.",
-        },
-      );
+      toast.success(mode === "login" ? "Signed in" : "Account created", {
+        description:
+          mode === "login"
+            ? "Welcome back — let's pick up where you left off."
+            : "Your interview prep workspace is ready.",
+      });
       onOpenChange(false);
       // Land on the authenticated workspace, not directly into setup. Returning users
       // see their chat history sidebar + a "Start new session" CTA so they can pick
@@ -166,8 +163,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
     },
     forgot: {
       title: "Reset your password",
-      description:
-        "Enter your account email and we'll send you a reset link.",
+      description: "Enter your account email and we'll send you a reset link.",
     },
   };
 
@@ -187,7 +183,9 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 id="email"
                 type="email"
                 placeholder="you@example.com"
-                aria-invalid={authForm.formState.errors.email ? "true" : "false"}
+                aria-invalid={
+                  authForm.formState.errors.email ? "true" : "false"
+                }
                 {...authForm.register("email")}
               />
               {authForm.formState.errors.email && (
@@ -251,9 +249,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
               </span>
               <button
                 type="button"
-                onClick={
-                  mode === "login" ? switchToRegister : switchToLogin
-                }
+                onClick={mode === "login" ? switchToRegister : switchToLogin}
                 className="text-primary hover:underline font-medium"
               >
                 {mode === "login" ? "Sign up" : "Sign in"}
@@ -311,8 +307,8 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
         {mode === "forgot" && forgotSubmitted && (
           <div className="space-y-4 text-center">
             <p className="text-sm text-muted-foreground">
-              If that email exists, a password reset link has been sent.
-              Check your inbox (or your terminal logs in dev mode).
+              If that email exists, a password reset link has been sent. Check
+              your inbox (or your terminal logs in dev mode).
             </p>
             <Button
               type="button"

@@ -88,11 +88,11 @@ export function InterviewHeader({
   };
 
   return (
-    <div className="h-full flex items-center justify-between px-6">
-      <h1 className="text-sm font-semibold text-foreground truncate max-w-[40%]">
+    <div className="h-full flex items-center justify-between px-3 sm:px-6">
+      <h1 className="text-sm font-semibold text-foreground truncate max-w-[45%] sm:max-w-[40%]">
         {title}
       </h1>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1.5 sm:gap-3">
         {currentRound > 1 && (
           <span
             // Amber badge — round progression is an "achievement" moment (the user
@@ -132,8 +132,11 @@ export function InterviewHeader({
           </Button>
         )}
         {/* Visible LLM provider badge so users know whether they're being graded by a
-            real model or by today's deterministic stub. */}
-        <LlmBadge />
+            real model or by today's deterministic stub. Hidden on the narrowest screens
+            so the header toolbar doesn't overflow on mobile. */}
+        <span className="hidden sm:inline-flex">
+          <LlmBadge />
+        </span>
         {/* Auth-aware UserMenu also lives in the interview shell so Sign out is
             reachable without leaving the interview view. */}
         <UserMenu />

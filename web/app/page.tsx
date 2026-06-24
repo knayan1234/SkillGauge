@@ -9,21 +9,15 @@
 
 import { AppLayout } from "@/components/AppLayout";
 import { HeroCta } from "@/components/HeroCta";
-import { Aurora } from "@/components/effects/Aurora";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SkillGaugeLogo } from "@/components/SkillGaugeLogo";
 
 export default function LandingPage() {
   return (
     <AppLayout>
-      {/* Ambient layer — three soft drifting orbs (Aurora primitive). Replaces the
-          older static-gradient + two floating blobs with a more refined, AI-coded
-          backdrop that reacts to theme tokens. */}
-      <Aurora />
-
       {/* Sticky-footer layout: main flexes to fill, footer sits at the bottom. The
           `min-h` (not `h-`) lets very short viewports scroll instead of clipping. */}
-      <div className="min-h-[calc(100vh-3.5rem)] flex flex-col">
+      <div className="min-h-[calc(100dvh-3.5rem)] flex flex-col">
         <main className="flex-1 flex items-center justify-center px-6 py-10 md:py-14">
           <div className="w-full max-w-3xl space-y-10 md:space-y-12 animate-slide-up">
             {/* Hero block */}
@@ -38,13 +32,11 @@ export default function LandingPage() {
 
               <h1 className="text-3xl md:text-5xl font-bold tracking-tight leading-[1.05]">
                 Interview practice,{" "}
-                <span className="animate-gradient-text">
-                  built around you.
-                </span>
+                <span className="animate-gradient-text">built around you.</span>
               </h1>
 
               <p className="text-base md:text-lg text-muted-foreground leading-relaxed max-w-xl mx-auto">
-                Add your résumé and a job description. Walk through a structured
+                Add your resume and a job description. Walk through a structured
                 mock interview — each answer scored, weak spots queued for the
                 next round.
               </p>

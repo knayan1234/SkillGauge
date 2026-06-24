@@ -87,7 +87,7 @@ export function SessionsHistorySidebar({
   const grouped = groupSessionsByResumeAndDay(entries);
 
   return (
-    <div className="h-full flex flex-col p-4">
+    <div className="flex-1 min-h-0 flex flex-col p-4">
       {/* No brand mark here — `<BrandLink />` lives in the workspace header. The
           sidebar is now dedicated entirely to the chat-history list, with no chrome
           duplication. */}
@@ -103,7 +103,7 @@ export function SessionsHistorySidebar({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hidden">
         {isLoading && (
           <p className="text-xs text-muted-foreground/70 px-1">Loading…</p>
         )}

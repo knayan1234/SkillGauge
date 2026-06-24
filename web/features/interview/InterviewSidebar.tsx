@@ -245,7 +245,7 @@ export function InterviewSidebar({
   };
 
   return (
-    <div className="h-full flex flex-col p-4">
+    <div className="flex-1 min-h-0 flex flex-col p-4">
       {/* No brand mark here — `<BrandLink />` lives in the interview shell's header.
           The sidebar is dedicated entirely to the résumé context + chat history. */}
 
@@ -274,7 +274,7 @@ export function InterviewSidebar({
         </Card>
       )}
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hidden">
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs font-medium text-muted-foreground">
             Chat history

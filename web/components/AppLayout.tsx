@@ -33,7 +33,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const onDashboard = pathname === "/dashboard";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-dvh bg-background">
       {/* === Header — designed as three balanced regions ============================
        *
        *   [ BrandLink ]                                                  [ right cluster ]

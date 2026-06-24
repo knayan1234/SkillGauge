@@ -22,7 +22,7 @@ export default function NotFound() {
   }, [pathname]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="flex min-h-dvh items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md border-border/50">
         <CardContent className="p-2">
           <EmptyState

@@ -4,5 +4,9 @@
 # ...except .gitignore itself
 !.gitignore
 
-# Ignore all Markdown files
-*.md
+# # Ignore all Markdown files
+# *.md
+*.html
+
+# folder
+DOCS/

@@ -16,7 +16,7 @@ export default function GlobalError({ error, reset }: ErrorProps) {
   const isDev = process.env.NODE_ENV !== "production";
 
   return (
-    <main className="min-h-screen bg-background flex items-center justify-center p-4">
+    <main className="min-h-dvh bg-background flex items-center justify-center p-4">
       <div className="max-w-md w-full text-center">
         <h1 className="text-4xl font-bold text-foreground mb-4">Error</h1>
         <p className="text-muted-foreground mb-6">

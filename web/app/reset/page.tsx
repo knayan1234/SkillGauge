@@ -42,7 +42,7 @@ function ResetPageContent() {
   const token = searchParams.get("token") ?? "";
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center px-4 py-12">
+    <div className="min-h-[calc(100dvh-3.5rem)] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md animate-slide-up">
         <Card className="border-primary/20 bg-card/50 backdrop-blur-sm shadow-lg shadow-primary/10">
           <CardHeader className="text-center pb-2">

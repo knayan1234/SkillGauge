@@ -616,102 +616,11 @@
     }
   }
 
-  /* === Aurora — three soft drifting orbs as ambient backdrop. Pure CSS, no canvas.
-   * Opacity is intentionally tuned so the orbs read as a faint glow against the
-   * background, never as visible colorful blobs. */
-  .aurora-orb {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(96px);
-    opacity: 0.22;
-    will-change: transform;
-  }
-
-  .dark .aurora-orb {
-    opacity: 0.12;
-  }
-
-  .aurora-orb-a {
-    width: 60vw;
-    height: 60vw;
-    max-width: 720px;
-    max-height: 720px;
-    background: radial-gradient(
-      circle at 50% 50%,
-      color-mix(in srgb, var(--color-primary) 40%, transparent) 0%,
-      transparent 65%
-    );
-    top: -22%;
-    left: -16%;
-    animation: aurora-drift-a 32s ease-in-out infinite;
-  }
-
-  .aurora-orb-b {
-    width: 55vw;
-    height: 55vw;
-    max-width: 660px;
-    max-height: 660px;
-    background: radial-gradient(
-      circle at 50% 50%,
-      color-mix(in srgb, var(--color-accent-2) 35%, transparent) 0%,
-      transparent 65%
-    );
-    bottom: -25%;
-    right: -18%;
-    animation: aurora-drift-b 38s ease-in-out infinite;
-  }
-
-  .aurora-orb-c {
-    width: 45vw;
-    height: 45vw;
-    max-width: 540px;
-    max-height: 540px;
-    background: radial-gradient(
-      circle at 50% 50%,
-      color-mix(in srgb, var(--color-accent) 30%, transparent) 0%,
-      transparent 65%
-    );
-    top: 20%;
-    right: -8%;
-    animation: aurora-drift-c 44s ease-in-out infinite;
-  }
-
-  @keyframes aurora-drift-a {
-    0%,
-    100% {
-      transform: translate(0, 0) scale(1);
-    }
-    50% {
-      transform: translate(8%, 6%) scale(1.08);
-    }
-  }
-
-  @keyframes aurora-drift-b {
-    0%,
-    100% {
-      transform: translate(0, 0) scale(1);
-    }
-    50% {
-      transform: translate(-6%, -8%) scale(1.05);
-    }
-  }
-
-  @keyframes aurora-drift-c {
-    0%,
-    100% {
-      transform: translate(0, 0) scale(1);
-    }
-    50% {
-      transform: translate(-10%, 5%) scale(1.12);
-    }
-  }
-
   @media (prefers-reduced-motion: reduce) {
     .animate-gradient-text,
     .animate-float,
     .animate-pulse-glow,
     .animate-gradient,
-    .aurora-orb,
     .brand-frame,
     .icon-tile,
     .pulse-dot,
@@ -726,5 +635,16 @@
     .lift-card {
       transition: none !important;
     }
+  }
+
+  /* .scrollbar-hidden — apply to any scroll container that should scroll silently.
+   * Content stays fully scrollable; the bar itself is invisible. Targeted class so
+   * we never accidentally affect click targets or layout on unrelated elements. */
+  .scrollbar-hidden {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge legacy */
+  }
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none; /* Chrome / Safari / Edge */
   }
 }

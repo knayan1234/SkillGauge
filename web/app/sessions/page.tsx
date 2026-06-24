@@ -32,7 +32,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { BrandLink } from "@/components/BrandLink";
 import { HeaderNav } from "@/components/HeaderNav";
-import { Aurora } from "@/components/effects/Aurora";
 import { useAuth } from "@/hooks/useAuth";
 import { listSessions, fetchDashboardSummary } from "@/services/api";
 
@@ -101,10 +100,6 @@ export default function SessionsLandingPage() {
       }
     >
       <div className="h-full overflow-y-auto">
-        {/* Aurora ambient backdrop — same primitive as the home page so the workspace
-            and landing pages share visual DNA. */}
-        <Aurora />
-
         <div className="max-w-3xl mx-auto px-6 md:px-10 py-12 md:py-20 space-y-12">
           {/* Welcome */}
           <div className="space-y-4 animate-fade-in">

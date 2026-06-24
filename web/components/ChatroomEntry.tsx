@@ -70,12 +70,14 @@ export function ChatroomEntry({
   // fill reads as "alien" against the warm surrounding. Switched to a translucent
   // warm-white that lets the sidebar's cream peek through faintly + an amber-tinted
   // border instead of neutral. Active state uses amber (the brand accent) so the
-  // current chatroom matches the rest of the warm system.
+  // current chatroom matches the rest of the warm system. In dark mode the white fill is
+  // dialed down to ~6% and the border becomes a faint light hairline so entries read as
+  // subtle elevated surfaces over the dark sidebar, not glaring pale blocks.
   const className = [
     "p-3 transition-all duration-200",
     isActive
       ? "bg-amber-500/10 border-amber-500/40 shadow-sm shadow-amber-500/10"
-      : "bg-white/55 border-amber-900/10",
+      : "bg-white/55 dark:bg-white/[0.06] border-amber-900/10 dark:border-white/10",
     interactive
       ? "cursor-pointer hover:bg-amber-500/8 hover:border-amber-500/30 hover:-translate-y-0.5"
       : "cursor-default",
@@ -142,7 +144,7 @@ export function ChatroomEntry({
             }}
             aria-label={`Delete ${title}`}
             title="Delete chatroom"
-            className="absolute top-2 right-2 p-1 rounded text-muted-foreground/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/60 transition-opacity"
+            className="absolute top-2 right-2 p-1 rounded text-muted-foreground/60 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 hover:text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/60 transition-opacity"
           >
             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
@@ -164,7 +166,7 @@ export function ChatroomEntry({
           onClick={() => onDelete(id)}
           aria-label={`Delete ${title}`}
           title="Delete chatroom"
-          className="absolute top-2 right-2 p-1 rounded text-muted-foreground/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/60 transition-opacity"
+          className="absolute top-2 right-2 p-1 rounded text-muted-foreground/60 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 hover:text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/60 transition-opacity"
         >
           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
