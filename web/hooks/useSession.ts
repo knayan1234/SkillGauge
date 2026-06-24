@@ -13,6 +13,7 @@ import {
   startNextRound,
   fetchSessionMessages,
   fetchSession,
+  listSessions,
 } from "@/services/api";
 
 interface SessionState {
@@ -47,6 +48,24 @@ function describeError(err: unknown): string {
     return err.message;
   }
   return "The interviewer didn't respond. Please try again in a moment.";
+}
+
+// Resolve a session's metadata for opening a past chat. Prefer GET /api/sessions/:id
+// (works for any session). If the backend doesn't have that route yet — e.g. the frontend
+// deployed ahead of the backend, or vice-versa — fall back to finding it in the sessions
+// list so old chats still open during a deploy lag. A genuinely missing session still
+// throws (it won't be in the list either).
+async function loadSessionMeta(sessionId: string): Promise<Session> {
+  try {
+    return await fetchSession(sessionId);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      const sessions = await listSessions();
+      const found = sessions.find((s) => s.id === sessionId);
+      if (found) return found;
+    }
+    throw err;
+  }
 }
 
 export function useSession(): UseSessionReturn {
@@ -158,7 +177,7 @@ export function useSession(): UseSessionReturn {
   const loadMutation = useMutation({
     mutationFn: async (sessionId: string) => {
       const [meta, messages] = await Promise.all([
-        fetchSession(sessionId),
+        loadSessionMeta(sessionId),
         fetchSessionMessages(sessionId),
       ]);
       return { meta, messages };
