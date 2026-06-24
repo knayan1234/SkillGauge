@@ -26,6 +26,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import { InterviewLayout } from "@/components/InterviewLayout";
 import { InterviewSidebar } from "@/features/interview/InterviewSidebar";
 import { InterviewHeader } from "@/features/interview/InterviewHeader";
@@ -301,6 +302,27 @@ function InterviewPageBody() {
             stable so content drops into the right slots. */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-3xl mx-auto pb-4">
+            {/* Prominent status card so the wait never reads as a blank/stuck screen — the
+                free-tier backend can take up to a minute to wake on the first request. */}
+            <div className="mb-6 rounded-xl border border-border bg-card/60 px-5 py-6 text-center">
+              <div className="flex justify-center">
+                <Loader2
+                  className="h-6 w-6 animate-spin text-primary"
+                  aria-hidden="true"
+                />
+              </div>
+              <p className="mt-3 text-sm font-medium text-foreground">
+                {sessionIdFromUrl
+                  ? "Loading your session…"
+                  : "Starting your interview…"}
+              </p>
+              <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-muted-foreground">
+                Waking up the server and preparing your{" "}
+                {sessionIdFromUrl ? "conversation" : "first question"}. On the free
+                tier the first request after a while can take up to a minute — this is
+                normal and usually only happens once.
+              </p>
+            </div>
             <ChatSkeleton />
           </div>
         </div>

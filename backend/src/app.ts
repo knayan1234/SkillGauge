@@ -2,8 +2,7 @@
  * Express application factory.
  *
  * Returns a configured but un-listened Express app so tests can drive it through
- * supertest without opening a socket. Mirrors the Fastify-era contract of `buildApp()`
- * minus the framework-specific Reply/Hook surface.
+ * supertest without opening a socket.
  *
  * Middleware order matters and is fixed here:
  *   1. pino-http  — request logger; attaches `req.log` for downstream handlers
@@ -61,7 +60,7 @@ export async function buildApp(): Promise<Application> {
 
   // `credentials: true` + cookie auth REQUIRES an explicit origin — "*" is rejected by
   // browsers when cookies are attached. Split comma-separated list to allow staging +
-  // prod together. Same behaviour as the Fastify-era cors registration.
+  // prod together.
   app.use(
     cors({
       origin: env.CORS_ORIGIN.split(",").map((s) => s.trim()),
