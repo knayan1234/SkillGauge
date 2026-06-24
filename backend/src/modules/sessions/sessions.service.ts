@@ -441,24 +441,19 @@ export const sessionsService = {
       );
     }
 
-    const now = new Date();
-    const answerDoc: MessageDoc = {
-      _id: randomUUID(),
-      sessionId,
-      type: "answer",
-      content: answer,
-      createdAt: now.toISOString(),
-    };
-    await messagesRepo.create(answerDoc);
-
+    // Prior transcript (everything BEFORE this answer) — grading context + cost accounting.
+    // Loaded before we persist anything so grading happens FIRST: if the LLM call throws
+    // (429 / timeout / empty response), nothing has been written, so a retry can't leave an
+    // orphan answer row with no feedback. reanswer() already follows this grade-then-persist
+    // order; this keeps submitAnswer consistent.
     const previousMessages = (await messagesRepo.listBySession(sessionId)).map(
       (m) => ({ type: m.type, content: m.content }),
     );
-    // Cost guards before grading.
     const historyChars = previousMessages.reduce(
       (sum, m) => sum + m.content.length,
       0,
     );
+    // Cost guards before grading.
     await ensureUnderQuotaAndLength(
       userId,
       sessionDoc.resumeContent.length +
@@ -476,6 +471,8 @@ export const sessionsService = {
       previousMessages,
       pastQuestions,
     );
+    // Grade FIRST. A transient failure here throws before any write, so the user can retry
+    // the same answer without accumulating duplicate answer rows for this question index.
     const graded = await llm.gradeAnswer(currentQ.content, answer, ctx);
     await usageQuotasRepo.recordCall(
       userId,
@@ -490,6 +487,17 @@ export const sessionsService = {
       ),
     );
 
+    // Grading succeeded — persist the answer and its feedback together so they always land
+    // (or fail) as a pair. Answer keeps a `now` timestamp; feedback is +1ms so transcript
+    // ordering by createdAt stays stable even on fast loops.
+    const now = new Date();
+    const answerDoc: MessageDoc = {
+      _id: randomUUID(),
+      sessionId,
+      type: "answer",
+      content: answer,
+      createdAt: now.toISOString(),
+    };
     const feedbackDoc: MessageDoc = {
       _id: randomUUID(),
       sessionId,
@@ -497,9 +505,9 @@ export const sessionsService = {
       content: graded.content,
       feedback: graded.feedback,
       promptVersion: PROMPT_VERSION,
-      // +1ms so list ordering by createdAt is stable even on fast loops.
       createdAt: new Date(now.getTime() + 1).toISOString(),
     };
+    await messagesRepo.create(answerDoc);
     await messagesRepo.create(feedbackDoc);
 
     // Memory writes — index the answer + feedback for retrieval. The feedback row
@@ -547,6 +555,13 @@ export const sessionsService = {
       );
       const nextContent = await llm.generateQuestion({
         ...ctx,
+        // ctx.previousMessages is the transcript BEFORE this answer; append the answer we
+        // just persisted so the follow-up question is informed by it (matches the prior
+        // behaviour where the answer row existed before this call).
+        previousMessages: [
+          ...previousMessages,
+          { type: "answer" as const, content: answer },
+        ],
         questionIndex: nextIndex,
       });
       await usageQuotasRepo.recordCall(
