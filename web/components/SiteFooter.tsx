@@ -94,7 +94,7 @@ export function SiteFooter({
           {/* Top row: brand on the left, attribution on the right. Stacks centered on
               very small viewports so each block stays legible. */}
           <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-3 sm:gap-4">
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-2.5">
               <div className="brand-frame rounded-lg flex-shrink-0">
                 <div className="brand-frame-inner h-7 w-7 rounded-lg flex items-center justify-center">
                   <SkillGaugeLogo size={16} className="text-amber-700" />
