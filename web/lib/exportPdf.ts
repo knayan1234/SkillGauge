@@ -74,7 +74,21 @@ export function exportSessionPdf({ session, messages }: ExportPdfParams): void {
       : null,
   ].filter(Boolean);
   doc.text(subtitleParts.join(" · "), MARGIN, y);
-  y += 8;
+  y += 6;
+
+  // Which résumé this interview was conducted against — so a user with several
+  // résumés can tell which report belongs to which one.
+  if (session.resumeFileName) {
+    const resumeLines = doc.splitTextToSize(
+      `Resume: ${session.resumeFileName}`,
+      CONTENT_WIDTH,
+    ) as string[];
+    for (const line of resumeLines) {
+      doc.text(line, MARGIN, y);
+      y += LINE_HEIGHT;
+    }
+  }
+  y += 4;
 
   // Divider line below the header so the body starts visually separated.
   doc.setDrawColor(180);

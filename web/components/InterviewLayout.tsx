@@ -27,6 +27,7 @@ import {
   type ReactNode,
 } from "react";
 import { Menu, X, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { SiteFooter } from "./SiteFooter";
 
 interface InterviewLayoutProps {
   children: ReactNode;
@@ -129,7 +130,9 @@ export function InterviewLayout({
   }
 
   return (
-    <div className="h-dvh bg-background flex overflow-hidden">
+    <div className="h-dvh bg-background flex flex-col overflow-hidden">
+      {/* Sidebar + main row fills all height above the thin footer. */}
+      <div className="flex-1 min-h-0 flex overflow-hidden">
 
       {sidebar && (
         <>
@@ -248,6 +251,13 @@ export function InterviewLayout({
           </div>
         </>
       )}
+      </div>
+
+      {/* Compact footer pinned at the bottom of the interview / sessions shell so
+          About + Contact are reachable here too. */}
+      <div className="flex-shrink-0">
+        <SiteFooter variant="compact" />
+      </div>
     </div>
   );
 }
