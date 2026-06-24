@@ -30,6 +30,7 @@
  *     and a quieter global header is better UX.
  */
 
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bot } from "lucide-react";
 import { fetchHealthInfo } from "@/services/api";
@@ -63,6 +64,20 @@ export function LlmBadge() {
     retry: false,
   });
 
+  // On mobile the badge is icon-only — the full "gemini · gemini-2.5-flash" string
+  // crowded the nav bar. Tapping the icon opens a small popover (anchored at the badge)
+  // with the provider + model + explanation. Escape closes it; an invisible backdrop
+  // catches outside taps.
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   // Don't render anything until we have a confirmed value. A skeleton would clutter a
   // tight header for a low-signal indicator.
   if (isLoading || isError || !data) return null;
@@ -74,13 +89,48 @@ export function LlmBadge() {
   const visibleLabel = data.llmModel ? `${label} · ${data.llmModel}` : label;
 
   return (
-    <span
-      className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/5 px-1.5 py-0.5 sm:px-2 sm:py-1 text-[10px] sm:text-xs font-medium text-primary max-w-[45vw] sm:max-w-none"
-      title={tooltip}
-      aria-label={`Active LLM provider: ${visibleLabel}`}
-    >
-      <Bot className="h-3 w-3 sm:h-3.5 sm:w-3.5 flex-shrink-0" />
-      <span className="truncate">{visibleLabel}</span>
-    </span>
+    <div className="relative inline-flex">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`Active LLM provider: ${visibleLabel}. Tap for details.`}
+        title={tooltip}
+        className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/5 px-1.5 py-0.5 sm:px-2 sm:py-1 text-[10px] sm:text-xs font-medium text-primary hover:bg-primary/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+      >
+        <Bot className="h-3.5 w-3.5 flex-shrink-0" />
+        {/* Text inline on sm+; hidden on mobile so only the robot icon sits in the nav.
+            On mobile the model name lives in the tap-popover below. */}
+        <span className="hidden sm:inline truncate max-w-[40vw] md:max-w-none">
+          {visibleLabel}
+        </span>
+      </button>
+
+      {open && (
+        <>
+          {/* Invisible backdrop — a tap anywhere outside closes the popover (mobile). */}
+          <div
+            className="fixed inset-0 z-40"
+            aria-hidden="true"
+            onClick={() => setOpen(false)}
+          />
+          {/* Anchored under the badge, right-aligned so it never runs off-screen. */}
+          <div
+            role="dialog"
+            aria-label="Active LLM provider"
+            className="absolute right-0 top-full z-50 mt-1.5 w-60 max-w-[80vw] rounded-lg border border-border bg-card p-3 text-left shadow-xl"
+          >
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+              <Bot className="h-3.5 w-3.5 flex-shrink-0" />
+              <span className="break-all">{visibleLabel}</span>
+            </div>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              {tooltip}
+            </p>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
