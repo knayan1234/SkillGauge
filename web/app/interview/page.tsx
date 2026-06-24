@@ -248,6 +248,15 @@ function InterviewPageBody() {
     };
   }, [isLoading, session]);
 
+  // A session that died on a start error is NOT "active" — clear the marker so /setup
+  // doesn't prompt to "archive chat & start new" for a dead session. The handoff
+  // (resume/JD/options) is left intact so "Try again" can re-run the same session.
+  useEffect(() => {
+    if (initError) {
+      sessionStorage.removeItem(STORAGE_KEYS.session.active);
+    }
+  }, [initError]);
+
   // Starting a NEW session failed (the LLM didn't respond, or the free-tier backend was
   // still waking up). Don't strand the user on an endless skeleton — show a clear,
   // actionable message. Past-session loads handle their own failure (toast + route to
