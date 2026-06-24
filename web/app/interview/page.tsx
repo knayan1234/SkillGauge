@@ -266,8 +266,20 @@ function InterviewPageBody() {
             </p>
             <div className="flex items-center justify-center gap-3">
               <Button onClick={() => window.location.reload()}>Try again</Button>
-              <Button variant="outline" onClick={() => router.push("/setup")}>
-                Back to setup
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // Start over: clear the session handoff so /setup loads completely fresh
+                  // (and the interview bootstrap can't re-fire with stale data), then do an
+                  // instant client-side route to the empty setup page.
+                  sessionStorage.removeItem(STORAGE_KEYS.session.id);
+                  sessionStorage.removeItem(STORAGE_KEYS.session.jobDescription);
+                  sessionStorage.removeItem(STORAGE_KEYS.session.options);
+                  sessionStorage.removeItem(STORAGE_KEYS.session.active);
+                  router.push("/setup");
+                }}
+              >
+                Start over
               </Button>
             </div>
           </div>

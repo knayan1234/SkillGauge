@@ -47,7 +47,7 @@ function describeError(err: unknown): string {
   if (err instanceof ApiError && err.code && err.code !== "INTERNAL_ERROR") {
     return err.message;
   }
-  return "The interviewer didn't respond. Please try again in a moment.";
+  return "The AI is temporarily unavailable or took too long to respond. Please try again.";
 }
 
 // Resolve a session's metadata for opening a past chat. Prefer GET /api/sessions/:id
