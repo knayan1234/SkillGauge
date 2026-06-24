@@ -53,9 +53,11 @@ const schema = z.object({
   // provider returns a different dim, you must rebuild the index. 768 is the default
   // for `gemini-embedding-001` and the stub.
   EMBEDDINGS_DIMENSIONS: z.coerce.number().int().positive().default(768),
-  // Per-call timeout for real LLM requests (ms). Default 30s — generous enough for hard
-  // questions on slower models, tight enough that a stuck provider doesn't pin a request.
-  LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  // Per-call timeout for real LLM requests (ms). Default 120s — Gemini (with its default
+  // "thinking" enabled) can take 30–50s to read the résumé + JD and craft a question, so we
+  // give it room rather than aborting mid-generation. Still bounded so a genuinely stuck
+  // provider can't pin a request forever.
+  LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   // Cost + rate guards.
   // - DAILY_TOKEN_LIMIT: per-user daily ceiling on LLM tokens consumed across all of
   //   their sessions. Resets at the day boundary (UTC). Default 100k tokens covers

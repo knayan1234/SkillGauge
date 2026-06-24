@@ -237,7 +237,7 @@ function InterviewPageBody() {
   useEffect(() => {
     if (isLoading && !session) {
       toast.loading(
-        "Server is booting up… the first request after a while can take up to a minute.",
+        "Preparing your interview — the AI is reading your résumé and the job description to craft tailored questions. This can take a moment…",
         { id: "booting" },
       );
     } else {
@@ -261,9 +261,8 @@ function InterviewPageBody() {
               We couldn&apos;t start your interview
             </h2>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              The interviewer didn&apos;t respond. On the free tier the server can take up
-              to a minute to wake up after a period of inactivity — give it a few seconds
-              and try again.
+              The AI didn&apos;t finish preparing your questions in time. This is usually
+              temporary — please try again.
             </p>
             <div className="flex items-center justify-center gap-3">
               <Button onClick={() => window.location.reload()}>Try again</Button>
@@ -314,13 +313,12 @@ function InterviewPageBody() {
               <p className="mt-3 text-sm font-medium text-foreground">
                 {sessionIdFromUrl
                   ? "Loading your session…"
-                  : "Starting your interview…"}
+                  : "Preparing your interview…"}
               </p>
               <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-muted-foreground">
-                Waking up the server and preparing your{" "}
-                {sessionIdFromUrl ? "conversation" : "first question"}. On the free
-                tier the first request after a while can take up to a minute — this is
-                normal and usually only happens once.
+                {sessionIdFromUrl
+                  ? "Fetching your conversation…"
+                  : "The AI is reading your résumé and the job description to craft tailored questions just for you. This can take a moment — hang tight."}
               </p>
             </div>
             <ChatSkeleton />
