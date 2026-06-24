@@ -67,6 +67,20 @@ const schema = z.object({
   //   context handles this trivially; OpenAI/Anthropic are fine too.
   DAILY_TOKEN_LIMIT: z.coerce.number().int().positive().default(100_000),
   MAX_INPUT_CHARS: z.coerce.number().int().positive().default(60_000),
+  // Transactional email for password-reset links. MAIL_PROVIDER picks the impl:
+  // "log" (default — logs the link, no send) or "smtp" (Nodemailer → any SMTP, e.g. Brevo).
+  // The mailer factory falls back to "log" if smtp is selected without SMTP_* creds, so a
+  // misconfiguration never breaks the reset flow — it just doesn't send.
+  MAIL_PROVIDER: z.enum(["log", "smtp"]).default("log"),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  // From-address on outgoing mail — must be a verified sender on your SMTP provider
+  // (e.g. Brevo → Senders), or the provider rejects the send.
+  MAIL_FROM: z.string().default("SkillGauge <no-reply@skillgauge.app>"),
+  // Public base URL of the frontend, for absolute links in emails (${APP_URL}/reset?token=...).
+  APP_URL: z.string().default("http://localhost:3000"),
 });
 
 // Dev default keeps `npm run dev` working without a .env file. Production MUST set JWT_SECRET.

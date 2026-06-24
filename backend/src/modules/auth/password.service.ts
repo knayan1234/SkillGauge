@@ -7,6 +7,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { env } from "@/config/env";
 import { passwordResetTokensRepo } from "@/db/repos/passwordResetTokens";
 import { usersRepo } from "@/db/repos/users";
+import { getMailer } from "@/mail";
 
 // Same bcrypt cost as register/login — must match so password verification stays consistent.
 const BCRYPT_ROUNDS = 10;
@@ -62,9 +63,17 @@ export const passwordResetService = {
       createdAt: now,
     });
 
-    // Caller (route) logs the link to stdout in dev. Production: this becomes a mail send.
-    // TODO: swap this string for a transactional-mail call (SES/Resend/Postmark).
-    return { link: `/reset?token=${plainToken}` };
+    const link = `/reset?token=${plainToken}`;
+    // Send the reset link by email. Best-effort: a mail failure must not break the opaque
+    // 200 the route returns, nor reveal whether the email is registered. Mailer is "log" by
+    // default (logs the link); set MAIL_PROVIDER=smtp + SMTP_* + APP_URL to actually send.
+    try {
+      await getMailer().sendPasswordReset(email, `${env.APP_URL}${link}`);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[mail] password-reset send failed:", err);
+    }
+    return { link };
   },
 
   // Single-use, time-limited. Three failure modes all collapse to INVALID_TOKEN so an
