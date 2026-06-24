@@ -321,7 +321,10 @@ export const sessionsService = {
     // retrieval standpoint but indexing them gives the dashboard a complete record.
     // All writes are best-effort — failures log + swallow so the chat flow never
     // breaks on an embeddings hiccup.
-    await Promise.all([
+    // Fire-and-forget: the memory/vector store is augmentation, not load-bearing for the
+    // response, so we don't block the (already slow) LLM round-trip on embedding writes.
+    // writeMemory swallows its own errors, so this Promise.all can never reject.
+    void Promise.all([
       writeMemory({
         userId,
         sessionId: sessionDoc._id,
@@ -502,7 +505,9 @@ export const sessionsService = {
     // Memory writes — index the answer + feedback for retrieval. The feedback row
     // carries the rubric `score` so the dashboard's weak-area aggregation can read
     // memories without joining back to messages. Best-effort; see writeMemory().
-    await Promise.all([
+    // Fire-and-forget — memory is augmentation, not load-bearing for the response (see
+    // initialize()). writeMemory swallows its own errors, so this can never reject.
+    void Promise.all([
       writeMemory({
         userId,
         sessionId,
@@ -756,7 +761,9 @@ export const sessionsService = {
     await messagesRepo.create(feedbackDoc);
 
     // Memory writes — same shape as the regular submitAnswer path.
-    await Promise.all([
+    // Fire-and-forget — memory is augmentation, not load-bearing for the response (see
+    // initialize()). writeMemory swallows its own errors, so this can never reject.
+    void Promise.all([
       writeMemory({
         userId,
         sessionId,

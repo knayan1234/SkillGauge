@@ -2,7 +2,9 @@
 
 import { useCallback, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
+  ApiError,
   type Session,
   type Message,
   type SessionInitRequest,
@@ -33,6 +35,17 @@ interface UseSessionReturn extends SessionState {
   loadFromServer: (sessionId: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
+// Turn an API failure into a user-facing toast description. SessionError-mapped responses
+// (quota, input-too-large, forbidden, …) carry a useful message; the generic 500 funnel
+// ("INTERNAL_ERROR" — e.g. an empty or timed-out LLM response) does not, so those get a
+// friendly retry hint instead of a scary "Internal server error".
+function describeError(err: unknown): string {
+  if (err instanceof ApiError && err.code && err.code !== "INTERNAL_ERROR") {
+    return err.message;
+  }
+  return "The interviewer didn't respond. Please try again in a moment.";
+}
+
 export function useSession(): UseSessionReturn {
   const [state, setState] = useState<SessionState>({
     session: null,
@@ -50,6 +63,10 @@ export function useSession(): UseSessionReturn {
         isComplete: false,
       });
     },
+    onError: (err) =>
+      toast.error("Couldn't start the interview", {
+        description: describeError(err),
+      }),
   });
 
   // Backend returns {answerMsg, feedback, nextQuestion, isComplete} atomically.
@@ -76,6 +93,10 @@ export function useSession(): UseSessionReturn {
         };
       });
     },
+    onError: (err) =>
+      toast.error("Couldn't grade your answer", {
+        description: describeError(err),
+      }),
   });
 
   const initializeSessionCallback = useCallback(
@@ -111,6 +132,10 @@ export function useSession(): UseSessionReturn {
         isComplete: false,
       }));
     },
+    onError: (err) =>
+      toast.error("Couldn't start the next round", {
+        description: describeError(err),
+      }),
   });
 
   const startNextRoundCallback = useCallback(async () => {

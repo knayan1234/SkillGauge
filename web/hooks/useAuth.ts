@@ -41,6 +41,13 @@ export function useAuth(): UseAuthReturn {
   // Shared success handler: writing to the query cache flips isAuthenticated everywhere.
   const handleAuthSuccess = useCallback(
     ({ user: nextUser }: { user: User }) => {
+      // A fresh login can follow a session that expired WITHOUT an explicit logout (only
+      // logout calls queryClient.clear()). Drop the previous user's cached server data so
+      // the new user never sees a stale session count / dashboard. Scoped to the per-user
+      // keys so the auth + health queries aren't disturbed — a blanket clear() would force
+      // a /me refetch that races the line below.
+      queryClient.removeQueries({ queryKey: ["sessions"] });
+      queryClient.removeQueries({ queryKey: ["dashboard"] });
       queryClient.setQueryData(AUTH_QUERY_KEY, nextUser);
     },
     [queryClient],

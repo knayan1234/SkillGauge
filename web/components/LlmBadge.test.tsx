@@ -50,13 +50,11 @@ describe("LlmBadge", () => {
     const badge = await screen.findByText("stub");
     expect(badge).toBeInTheDocument();
 
-    // Tooltip lives on the title attribute of the wrapping span. Hover-style title
-    // is the simplest a11y-friendly tooltip without adding a dependency.
-    const wrapper = badge.closest("span");
-    expect(wrapper?.getAttribute("title")).toMatch(
-      /stub provider/i,
-    );
-    expect(wrapper?.getAttribute("aria-label")).toMatch(/active llm provider/i);
+    // Tooltip + aria-label live on the badge button (the label text is a span inside it,
+    // hidden on mobile). Hover-style title is the simplest a11y-friendly tooltip.
+    const button = badge.closest("button");
+    expect(button?.getAttribute("title")).toMatch(/stub provider/i);
+    expect(button?.getAttribute("aria-label")).toMatch(/active llm provider/i);
   });
 
   it("appends '· <model>' to the label when llmModel is populated", async () => {

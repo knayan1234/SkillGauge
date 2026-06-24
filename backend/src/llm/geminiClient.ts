@@ -60,8 +60,16 @@ export class GeminiLLMClient implements LLMClient {
     );
     // The SDK's response object exposes a string `text` getter that flattens all parts.
     // Trim trailing whitespace and any wrapping quotes some models emit despite prompts.
-    const content = response.text ?? "";
-    return content.trim().replace(/^"|"$/g, "");
+    const cleaned = (response.text ?? "").trim().replace(/^"|"$/g, "");
+    if (!cleaned) {
+      // Empty candidate — safety block, MAX_TOKENS, or a genuinely empty response. Fail
+      // loudly instead of persisting a blank question that would leave the UI stuck on
+      // "AI thinking…". The route funnels this to a 500; the FE surfaces a toast.
+      throw new Error(
+        "The interviewer returned an empty response. Please try again.",
+      );
+    }
+    return cleaned;
   }
 
   async gradeAnswer(
@@ -91,8 +99,22 @@ export class GeminiLLMClient implements LLMClient {
         }),
       ),
     );
-    const raw = response.text ?? "{}";
-    const parsed = JSON.parse(raw) as unknown;
+    const raw = (response.text ?? "").trim();
+    if (!raw) {
+      // Empty grading response (safety block / MAX_TOKENS). Throw a clear message rather
+      // than letting `JSON.parse("")` produce a cryptic SyntaxError 500.
+      throw new Error(
+        "The interviewer returned an empty response. Please try again.",
+      );
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error(
+        "The interviewer returned an unreadable response. Please try again.",
+      );
+    }
     const validated = responseSchema.parse(parsed);
     return {
       content: validated.content,
