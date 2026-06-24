@@ -20,6 +20,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./ThemeToggle";
 import { UserMenu } from "./UserMenu";
+import { SiteFooter } from "./SiteFooter";
 import { useAuth } from "@/hooks/useAuth";
 
 interface AppLayoutProps {
@@ -100,6 +101,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Main area sits below the fixed header. h-16 header → pt-16 main. */}
       <main className="pt-16">{children}</main>
+
+      {/* Compact footer on every non-home page (setup / reset / dashboard). Home renders
+          its own full SiteFooter in-page, so skip it here to avoid doubling up. */}
+      {pathname !== "/" && <SiteFooter variant="compact" />}
     </div>
   );
 }

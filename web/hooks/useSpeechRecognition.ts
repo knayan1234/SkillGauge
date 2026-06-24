@@ -73,10 +73,22 @@ function getSpeechRecognitionCtor(): SpeechRecognitionConstructor | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
-export function useSpeechRecognition(): UseSpeechRecognitionReturn {
+export function useSpeechRecognition(
+  opts: { onEnd?: (finalTranscript: string) => void } = {},
+): UseSpeechRecognitionReturn {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  // Latest transcript in a ref so the (closure-captured) onend handler reads the final
+  // value; latest onEnd callback in a ref so onend always calls the current one.
+  const transcriptRef = useRef("");
+  const onEndRef = useRef(opts.onEnd);
+  // Keep the latest onEnd in a ref — updated in an effect (not during render, which the
+  // react-hooks/refs rule forbids) — so the onend handler captured once in start() always
+  // invokes the current callback.
+  useEffect(() => {
+    onEndRef.current = opts.onEnd;
+  });
 
   // SSR-safe browser-API support detection. `useSyncExternalStore` is the React-
   // recommended primitive for this — server snapshot returns false, client snapshot
@@ -112,7 +124,9 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
       for (let i = 0; i < event.results.length; i++) {
         next += event.results[i][0].transcript;
       }
-      setTranscript(next.trim());
+      const trimmed = next.trim();
+      transcriptRef.current = trimmed;
+      setTranscript(trimmed);
     };
 
     rec.onerror = () => {
@@ -123,9 +137,12 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     };
 
     rec.onend = () => {
-      // Recognition naturally ends on silence. Mark ourselves not-listening so the
-      // mic button shows the right icon.
+      // Recognition naturally ends on silence (continuous=false). Mark not-listening so
+      // the mic button updates, AND hand the final transcript to the caller so it can be
+      // committed — otherwise the captured text vanishes when displayValue falls back to
+      // the (empty) typed answer.
       setIsListening(false);
+      onEndRef.current?.(transcriptRef.current);
     };
 
     recognitionRef.current = rec;
@@ -141,7 +158,10 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     };
   }, []);
 
-  const reset = useCallback(() => setTranscript(""), []);
+  const reset = useCallback(() => {
+    transcriptRef.current = "";
+    setTranscript("");
+  }, []);
 
   return { isListening, isSupported, transcript, reset, start, stop };
 }

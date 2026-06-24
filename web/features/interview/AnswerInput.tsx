@@ -18,7 +18,14 @@ export function AnswerInput({
   isDisabled,
 }: AnswerInputProps) {
   const [answer, setAnswer] = useState("");
-  const speech = useSpeechRecognition();
+  // Commit the final transcript into `answer` when dictation ends — whether the user taps
+  // the mic to stop OR recognition auto-ends on silence. Without this, the text disappears
+  // a few seconds after speaking (auto-end flips isListening → displayValue shows `answer`).
+  const speech = useSpeechRecognition({
+    onEnd: (finalTranscript) => {
+      if (finalTranscript) setAnswer(finalTranscript);
+    },
+  });
 
   // While the mic is on, the live transcript is the textarea's source of truth;
   // when the mic is off, the user's typed `answer` is. Computing this as derived

@@ -49,16 +49,46 @@ const AUTHOR_EMAIL = "kunayan.dev@gmail.com";
 // When unset, the contact form falls back to a mailto: link.
 const WEB3FORMS_ACCESS_KEY = process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY ?? "";
 
-export function SiteFooter() {
+export function SiteFooter({
+  variant = "full",
+}: {
+  variant?: "full" | "compact";
+}) {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
   const [authorOpen, setAuthorOpen] = useState(false);
 
   return (
     <>
-      {/* Footer — `footer-surface` is the glassmorphic mirror of the header. Same
-          translucent fill + backdrop-blur + saturation, with the highlight border on
-          top instead of the bottom. */}
+      {/* Full footer on the home page; a compact About + Contact row on every other page
+          (same dialogs). `footer-surface` is the glassmorphic mirror of the header. */}
+      {variant === "compact" ? (
+        <footer className="footer-surface" role="contentinfo">
+          <div className="max-w-3xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <button
+              type="button"
+              onClick={() => setAboutOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={aboutOpen}
+              className="hover:text-foreground transition-colors underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded px-1"
+            >
+              About SkillGauge
+            </button>
+            <span aria-hidden="true" className="text-muted-foreground/40">·</span>
+            <button
+              type="button"
+              onClick={() => setContactOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={contactOpen}
+              className="hover:text-foreground transition-colors underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded px-1"
+            >
+              Contact
+            </button>
+            <span aria-hidden="true" className="text-muted-foreground/40">·</span>
+            <span className="text-muted-foreground/50">© {BUILD_YEAR} SkillGauge</span>
+          </div>
+        </footer>
+      ) : (
       <footer className="footer-surface" role="contentinfo">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
           {/* Top row: brand on the left, attribution on the right. Stacks centered on
@@ -129,6 +159,7 @@ export function SiteFooter() {
           </nav>
         </div>
       </footer>
+      )}
 
       <Dialog open={aboutOpen} onOpenChange={setAboutOpen}>
         <DialogContent className="max-w-2xl">
@@ -140,8 +171,7 @@ export function SiteFooter() {
                 </div>
               </div>
               <DialogTitle className="text-2xl tracking-tight">
-                About{" "}
-                <span className="animate-gradient-text">SkillGauge</span>
+                About <span className="animate-gradient-text">SkillGauge</span>
               </DialogTitle>
             </div>
             <DialogDescription>
@@ -151,13 +181,29 @@ export function SiteFooter() {
           </DialogHeader>
 
           <div className="space-y-5 text-sm leading-relaxed pt-2">
-            <Section title="What it is" icon={<FileText className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}>
+            <Section
+              title="What it is"
+              icon={
+                <FileText
+                  className="h-3.5 w-3.5 text-primary"
+                  aria-hidden="true"
+                />
+              }
+            >
               A personal interview-practice tool. Add your résumé and a job
               description, and an AI interviewer asks you questions one at a
               time, scores each answer 1–10, and tells you what to improve.
             </Section>
 
-            <Section title="What makes it useful" icon={<Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}>
+            <Section
+              title="What makes it useful"
+              icon={
+                <Sparkles
+                  className="h-3.5 w-3.5 text-primary"
+                  aria-hidden="true"
+                />
+              }
+            >
               <ul className="space-y-2 pl-1">
                 <Bullet label="Built around you.">
                   Questions come from your résumé and the target role — not a
@@ -178,13 +224,26 @@ export function SiteFooter() {
               </ul>
             </Section>
 
-            <Section title="Privacy" icon={<ShieldCheck className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}>
-              Your résumé, job descriptions, and answers are stored only to give
+            <Section
+              title="Privacy"
+              icon={
+                <ShieldCheck
+                  className="h-3.5 w-3.5 text-primary"
+                  aria-hidden="true"
+                />
+              }
+            >
+              Your resume, job descriptions, and answers are stored only to give
               you that continuity. Nothing is shared or sold — no ads, no
               tracking.
             </Section>
 
-            <Section title="Made by" icon={<User className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}>
+            <Section
+              title="Made by"
+              icon={
+                <User className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+              }
+            >
               Kumar Nayan (
               <a
                 href="mailto:kumarnayan.work@gmail.com"
@@ -254,7 +313,10 @@ function ContactDialog({ open, onOpenChange }: ContactDialogProps) {
     try {
       const res = await fetch("https://api.web3forms.com/submit", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
         body: JSON.stringify({
           access_key: WEB3FORMS_ACCESS_KEY,
           subject,
@@ -265,9 +327,14 @@ function ContactDialog({ open, onOpenChange }: ContactDialogProps) {
           message,
         }),
       });
-      const data = (await res.json()) as { success?: boolean; message?: string };
+      const data = (await res.json()) as {
+        success?: boolean;
+        message?: string;
+      };
       if (!res.ok || !data.success) {
-        throw new Error(data.message || "Something went wrong sending your message.");
+        throw new Error(
+          data.message || "Something went wrong sending your message.",
+        );
       }
       toast.success("Message sent", {
         description: "Thanks for reaching out — I'll get back to you.",
@@ -299,10 +366,7 @@ function ContactDialog({ open, onOpenChange }: ContactDialogProps) {
           <div className="flex items-center gap-3 mb-2">
             <div className="icon-tile">
               <span className="icon-tile-inner inline-flex h-9 w-9 items-center justify-center rounded-md">
-                <Mail
-                  className="h-4 w-4 text-primary"
-                  aria-hidden="true"
-                />
+                <Mail className="h-4 w-4 text-primary" aria-hidden="true" />
               </span>
             </div>
             <DialogTitle className="text-xl tracking-tight">
@@ -406,7 +470,7 @@ interface AuthorDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const LINKEDIN_URL = "https://www.linkedin.in/knayan";
+const LINKEDIN_URL = "https://www.linkedin.com/in/knayan";
 // Avatar lives in `web/public/` so Next serves it from the site root. Drop a different
 // file there with this exact name to swap the doodle.
 const AVATAR_PATH = "/KNProfPic.png";
