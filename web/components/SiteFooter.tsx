@@ -243,16 +243,6 @@ export function SiteFooter({
               you that continuity. Nothing is shared or sold — no ads, no
               tracking.
             </Section>
-
-            <Section
-              title="Made by"
-              icon={
-                <User className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-              }
-            >
-              Kumar Nayan ( ) — a personal project, built end-to-end by one
-              person.
-            </Section>
           </div>
         </DialogContent>
       </Dialog>
