@@ -26,8 +26,6 @@
  *
  * TODO: wire useAuth's logout into the user menu in AppLayout (this modal doesn't need
  * a logout entry — it's only shown when the user is signed-out).
- * TODO: strip the demo defaults (demo@skillgauge.ai / password123) before public deploy
- * — they're a local-evaluation convenience only.
  */
 
 import { useState } from "react";
@@ -74,11 +72,9 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
   const authForm = useForm<AuthFormValues>({
     resolver: zodResolver(authSchema),
-    // Demo creds prefilled for easy evaluation.
-    // TODO: remove the demo defaults before public deploy.
     defaultValues: {
-      email: "demo@skillgauge.ai",
-      password: "password123",
+      email: "",
+      password: "",
     },
   });
 
@@ -134,14 +130,14 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
     setMode("login");
     setSubmitError("");
     setForgotSubmitted(false);
-    authForm.reset({ email: "demo@skillgauge.ai", password: "password123" });
+    authForm.reset({ email: "", password: "" });
   };
 
   const switchToRegister = () => {
     setMode("register");
     setSubmitError("");
     setForgotSubmitted(false);
-    authForm.reset({ email: "demo@skillgauge.ai", password: "password123" });
+    authForm.reset({ email: "", password: "" });
   };
 
   const switchToForgot = () => {

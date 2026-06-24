@@ -75,12 +75,12 @@ export function LlmBadge() {
 
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-2 py-1 text-xs font-medium text-primary"
+      className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/5 px-1.5 py-0.5 sm:px-2 sm:py-1 text-[10px] sm:text-xs font-medium text-primary max-w-[45vw] sm:max-w-none"
       title={tooltip}
       aria-label={`Active LLM provider: ${visibleLabel}`}
     >
-      <Bot className="h-3.5 w-3.5" />
-      {visibleLabel}
+      <Bot className="h-3 w-3 sm:h-3.5 sm:w-3.5 flex-shrink-0" />
+      <span className="truncate">{visibleLabel}</span>
     </span>
   );
 }

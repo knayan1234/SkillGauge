@@ -30,7 +30,7 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <h1 className="text-3xl md:text-5xl font-bold tracking-tight leading-[1.05]">
+              <h1 className="text-center text-balance text-2xl sm:text-3xl md:text-5xl font-bold tracking-tight leading-[1.1] md:leading-[1.05]">
                 Interview practice,{" "}
                 <span className="animate-gradient-text">built around you.</span>
               </h1>

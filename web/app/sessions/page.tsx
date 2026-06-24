@@ -107,7 +107,7 @@ export default function SessionsLandingPage() {
               Welcome back,{" "}
               <span className="font-medium text-foreground">{greeting}</span>.
             </p>
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight leading-tight">
+            <h1 className="text-2xl sm:text-3xl md:text-5xl font-bold tracking-tight leading-tight">
               Ready for your{" "}
               <span className="animate-gradient-text">next interview</span>?
             </h1>

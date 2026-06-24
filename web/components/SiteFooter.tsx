@@ -19,7 +19,6 @@
 import { useState } from "react";
 import {
   FileText,
-  Layers,
   Sparkles,
   ShieldCheck,
   User,
@@ -40,9 +39,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const BUILD_YEAR = new Date().getFullYear();
-const AUTHOR_EMAIL = "kumarnayan.work@gmail.com";
+const AUTHOR_EMAIL = "kunayan.dev@gmail.com";
+// Web3Forms access key — free form-to-email service. Create it at https://web3forms.com
+// using AUTHOR_EMAIL; submissions only deliver to that registered address, so this key
+// is safe to ship in the client bundle. Set it in Netlify as NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY.
+// When unset, the contact form falls back to a mailto: link.
+const WEB3FORMS_ACCESS_KEY = process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY ?? "";
 
 export function SiteFooter() {
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -82,7 +87,7 @@ export function SiteFooter() {
                 onClick={() => setAuthorOpen(true)}
                 aria-haspopup="dialog"
                 aria-expanded={authorOpen}
-                className="text-foreground font-medium hover:text-primary transition-colors underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded"
+                className="text-foreground font-medium underline decoration-amber-500/50 underline-offset-2 hover:text-amber-700 dark:hover:text-amber-400 hover:decoration-amber-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded"
               >
                 Kumar Nayan
               </button>
@@ -126,7 +131,7 @@ export function SiteFooter() {
       </footer>
 
       <Dialog open={aboutOpen} onOpenChange={setAboutOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <div className="flex items-center gap-3 mb-2">
               <div className="brand-frame rounded-xl flex-shrink-0">
@@ -145,76 +150,38 @@ export function SiteFooter() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 text-sm leading-relaxed pt-2">
+          <div className="space-y-5 text-sm leading-relaxed pt-2">
             <Section title="What it is" icon={<FileText className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}>
-              SkillGauge is an interview practice tool built around the role
-              you&apos;re actually applying for. You drop in a résumé and a job
-              description; it reads both, assembles a question generator
-              grounded in your real background, and walks you through a
-              structured mock interview. Every answer is graded with specific
-              feedback you can act on — what was missing, what to say next
-              time, what the model would have wanted to hear. The system
-              remembers what you struggled with, so the questions you fumble
-              today resurface in later rounds until you&apos;ve genuinely
-              worked through them.
+              A personal interview-practice tool. Add your résumé and a job
+              description, and an AI interviewer asks you questions one at a
+              time, scores each answer 1–10, and tells you what to improve.
             </Section>
 
-            <Section title="Why this is different" icon={<Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}>
-              <p className="mb-3">
-                Most interview prep is one-shot. Generic question banks.
-                Quizzes that reset every visit. They don&apos;t know who you
-                are, what role you want, or what you got wrong yesterday.
-                SkillGauge takes the opposite stance — your prep is a
-                continuing record, not a series of disposable practice runs.
-              </p>
-              <ul className="space-y-3 pl-1">
-                <Bullet label="Grounded in your context.">
-                  Every prompt references your actual résumé bullets and the
-                  target job description. Questions push on the parts that
-                  matter for the role you&apos;re targeting — not the same
-                  &ldquo;tell me about a time you showed leadership&rdquo; ten
-                  thousand other candidates have already heard.
+            <Section title="What makes it useful" icon={<Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}>
+              <ul className="space-y-2 pl-1">
+                <Bullet label="Built around you.">
+                  Questions come from your résumé and the target role — not a
+                  generic bank.
                 </Bullet>
-                <Bullet label="Specific, scorable feedback.">
-                  Answers are evaluated for substance and clarity, not length.
-                  Each grade comes with what was missing, what worked, and
-                  what to say next time. No generic encouragement, no
-                  &ldquo;great answer&rdquo; filler.
+                <Bullet label="Useful feedback.">
+                  Every answer gets a score and a clear &ldquo;what to fix next
+                  time.&rdquo;
                 </Bullet>
-                <Bullet label="Continuity across sessions.">
-                  Your weak spots are written into the system. The questions
-                  you struggle with today come back tomorrow, calibrated to
-                  where you fumbled. Later rounds raise the difficulty and
-                  target the gaps. Practice compounds.
+                <Bullet label="It remembers.">
+                  Your weak spots come back in later rounds, at higher
+                  difficulty, until you&apos;ve got them.
                 </Bullet>
-                <Bullet label="Your workspace, your pace.">
-                  Past chatrooms stay accessible, organized by résumé and
-                  date. Retry any answer. Open old sessions to compare. Run
-                  multiple résumés in parallel — separate roles, separate
-                  histories, all in one place.
+                <Bullet label="Everything is saved.">
+                  Past sessions stay, organized by résumé and date — retry any
+                  answer anytime.
                 </Bullet>
               </ul>
             </Section>
 
-            <Section title="How a session goes" icon={<Layers className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}>
-              You add a résumé (PDF or DOCX) and a job description, then pick
-              an interview style — behavioral, technical, or mixed — and a
-              difficulty level. The system parses your résumé, builds a
-              question generator from both documents, and asks you one
-              question at a time. You answer in chat. Each answer is graded
-              with a numeric score and written feedback. When the round
-              finishes, you can retry any question, start the next round at
-              higher difficulty, or close the session and pick it up another
-              day. Everything is saved.
-            </Section>
-
-            <Section title="Privacy stance" icon={<ShieldCheck className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}>
-              SkillGauge stores your résumé content, job descriptions, and
-              answer transcripts so the system can give you continuity across
-              sessions — that&apos;s the whole point. Nothing is shared with
-              third parties; there&apos;s no analytics tracking, no
-              advertising, no data brokerage. If you want to walk away, the
-              email link in the footer works for delete requests.
+            <Section title="Privacy" icon={<ShieldCheck className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}>
+              Your résumé, job descriptions, and answers are stored only to give
+              you that continuity. Nothing is shared or sold — no ads, no
+              tracking.
             </Section>
 
             <Section title="Made by" icon={<User className="h-3.5 w-3.5 text-primary" aria-hidden="true" />}>
@@ -225,12 +192,7 @@ export function SiteFooter() {
               >
                 kumarnayan.work@gmail.com
               </a>
-              ) — {BUILD_YEAR}. SkillGauge is a personal project, built
-              end-to-end by one person. It&apos;s not a SaaS, not a startup,
-              not collecting metrics for anyone. The intent is a tool
-              that&apos;s actually useful when you&apos;re preparing for the
-              next role you want — not another generic prep platform that
-              forgets you between visits.
+              ) — a personal project, built end-to-end by one person.
             </Section>
           </div>
         </DialogContent>
@@ -243,10 +205,10 @@ export function SiteFooter() {
 }
 
 /**
- * ContactDialog — casual reach-out form. The form doesn't POST anywhere; on submit
- * we construct a mailto: URL with the user's intent baked into the body and let the
- * browser hand it to their default mail client. No server, no API key, nothing to
- * deploy. The user is in control of actually sending the email — we just pre-fill it.
+ * ContactDialog — reach-out form. Submits to Web3Forms (free, no backend), which emails
+ * the message to the address the access key is registered to (AUTHOR_EMAIL). The key
+ * (NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY) is safe to ship client-side — Web3Forms only
+ * delivers to that pre-registered address. If the key is unset, falls back to mailto:.
  */
 interface ContactDialogProps {
   open: boolean;
@@ -258,6 +220,7 @@ function ContactDialog({ open, onOpenChange }: ContactDialogProps) {
   const [email, setEmail] = useState("");
   const [reason, setReason] = useState("Feedback");
   const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const reset = () => {
     setName("");
@@ -266,22 +229,61 @@ function ContactDialog({ open, onOpenChange }: ContactDialogProps) {
     setMessage("");
   };
 
-  const handleSend = () => {
-    // Build the mailto body with the form fields. Real form validation is light —
-    // we trust the mail client to surface "missing fields" once the user gets there.
+  // Send via Web3Forms (free, no backend) — it emails the submission to the address the
+  // access key is registered to. If no key is configured, fall back to opening the
+  // user's mail client with everything pre-filled.
+  const handleSend = async () => {
     const subject = `[SkillGauge] ${reason} from ${name || "a visitor"}`;
-    const body = [
-      `From: ${name || "(unnamed)"}${email ? ` <${email}>` : ""}`,
-      `Reason: ${reason}`,
-      "",
-      message,
-    ].join("\n");
-    const href = `mailto:${AUTHOR_EMAIL}?subject=${encodeURIComponent(
-      subject,
-    )}&body=${encodeURIComponent(body)}`;
-    window.location.href = href;
-    onOpenChange(false);
-    reset();
+
+    if (!WEB3FORMS_ACCESS_KEY) {
+      const body = [
+        `From: ${name || "(unnamed)"}${email ? ` <${email}>` : ""}`,
+        `Reason: ${reason}`,
+        "",
+        message,
+      ].join("\n");
+      window.location.href = `mailto:${AUTHOR_EMAIL}?subject=${encodeURIComponent(
+        subject,
+      )}&body=${encodeURIComponent(body)}`;
+      onOpenChange(false);
+      reset();
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          access_key: WEB3FORMS_ACCESS_KEY,
+          subject,
+          from_name: name || "SkillGauge visitor",
+          name: name || "(unnamed)",
+          email: email || AUTHOR_EMAIL,
+          reason,
+          message,
+        }),
+      });
+      const data = (await res.json()) as { success?: boolean; message?: string };
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Something went wrong sending your message.");
+      }
+      toast.success("Message sent", {
+        description: "Thanks for reaching out — I'll get back to you.",
+      });
+      onOpenChange(false);
+      reset();
+    } catch (err) {
+      toast.error("Couldn't send your message", {
+        description:
+          err instanceof Error
+            ? err.message
+            : `Please try again, or email ${AUTHOR_EMAIL} directly.`,
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -308,9 +310,8 @@ function ContactDialog({ open, onOpenChange }: ContactDialogProps) {
             </DialogTitle>
           </div>
           <DialogDescription>
-            Drop a line — feedback, bug reports, or just hello. Hitting send opens
-            your mail client with everything pre-filled; you decide whether to
-            actually send it.
+            Drop a line — feedback, bug reports, or just hello. Your message
+            comes straight to my inbox.
           </DialogDescription>
         </DialogHeader>
 
@@ -377,9 +378,9 @@ function ContactDialog({ open, onOpenChange }: ContactDialogProps) {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={!message.trim()}>
+            <Button type="submit" disabled={!message.trim() || submitting}>
               <Send className="h-3.5 w-3.5" aria-hidden="true" />
-              Send via mail
+              {submitting ? "Sending…" : "Send message"}
             </Button>
           </DialogFooter>
         </form>
@@ -450,15 +451,10 @@ function AuthorDialog({ open, onOpenChange }: AuthorDialogProps) {
 
         <div className="space-y-5 text-sm leading-relaxed pt-2">
           <p className="text-foreground/90 text-center">
-            Mid-level React developer at Deloitte by day, builder of small
-            opinionated tools by night. I like clean APIs, type-safe state, and
-            UIs that don&apos;t waste the user&apos;s time. SkillGauge is one of
-            those side experiments — born from frustration with one-shot
-            interview-prep apps that forget you the moment you log out.
-          </p>
-          <p className="text-muted-foreground italic text-center">
-            When I&apos;m not shipping components, I&apos;m probably refactoring
-            ones I shipped last week.
+            React developer at Deloitte. I build small side projects in my spare
+            time. SkillGauge is one of them — an interview-prep tool that
+            remembers your past sessions and builds on them, instead of starting
+            from scratch every visit.
           </p>
 
           <div className="flex justify-center pt-1">

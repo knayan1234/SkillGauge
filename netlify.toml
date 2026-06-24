@@ -1,0 +1,21 @@
+# Netlify config for the SkillGauge monorepo.
+# The Next.js frontend lives in web/; the Express backend deploys separately (Render),
+# and the FE reaches it via the same-origin BFF route handler using BACKEND_URL
+# (set BACKEND_URL in Netlify → Site configuration → Environment variables).
+#
+# Do NOT set `publish` here — the Netlify Next.js runtime auto-detects the app in
+# web/ and points the publish dir at web/.next itself. Hand-setting it causes a 404.
+
+[build]
+  base = "web"
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Explicitly enable the Next.js runtime so it generates the SSR/route-handler
+# functions + redirects and manages the publish dir itself. Without it (or if a
+# manual publish dir overrides it), Netlify serves .next as static files and an
+# App-Router app 404s at the root.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

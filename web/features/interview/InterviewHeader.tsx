@@ -131,12 +131,10 @@ export function InterviewHeader({
             <span className="hidden sm:inline">New session</span>
           </Button>
         )}
-        {/* Visible LLM provider badge so users know whether they're being graded by a
-            real model or by today's deterministic stub. Hidden on the narrowest screens
-            so the header toolbar doesn't overflow on mobile. */}
-        <span className="hidden sm:inline-flex">
-          <LlmBadge />
-        </span>
+        {/* Visible LLM provider badge so users know which model is grading them. Shown on
+            mobile too (compact + truncating) — "which model am I on?" is exactly what users
+            want to see on a small screen. */}
+        <LlmBadge />
         {/* Auth-aware UserMenu also lives in the interview shell so Sign out is
             reachable without leaving the interview view. */}
         <UserMenu />
