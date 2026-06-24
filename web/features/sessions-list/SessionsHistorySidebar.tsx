@@ -3,7 +3,7 @@
 /**
  * SessionsHistorySidebar — the chatroom list shown next to authenticated landing pages.
  *
- * Mirrors the grouping of [InterviewSidebar](../interview/InterviewSidebar.tsx) (résumé →
+ * Mirrors the grouping of [InterviewSidebar](../interview/InterviewSidebar.tsx) (resume →
  * day bucket) but without the interview-specific bits (leave-session confirm, "Resume in
  * use" dialog). Clicking an entry routes to `/interview?session=<id>` which hydrates that
  * past session's transcript into the interview view in read-only or continue mode based
@@ -23,7 +23,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, MessageSquare } from "lucide-react";
 import { SkillGaugeLogo } from "@/components/SkillGaugeLogo";
 import { toast } from "sonner";
-import { ChatroomEntry, type ChatroomEntryData } from "@/components/ChatroomEntry";
+import {
+  ChatroomEntry,
+  type ChatroomEntryData,
+} from "@/components/ChatroomEntry";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -59,7 +62,7 @@ export function SessionsHistorySidebar({
   });
 
   // Delete mutation — invalidates the sessions list + dashboard caches on success so
-  // both the sidebar and the dashboard's "My Résumés" panel reflect the removal.
+  // both the sidebar and the dashboard's "My resumes" panel reflect the removal.
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteSession(id),
     onSuccess: () => {
@@ -92,7 +95,9 @@ export function SessionsHistorySidebar({
           sidebar is now dedicated entirely to the chat-history list, with no chrome
           duplication. */}
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-medium text-muted-foreground">Chat history</p>
+        <p className="text-xs font-medium text-muted-foreground">
+          Chat history
+        </p>
         {sessions.length > 0 && (
           <p
             className="text-xs text-muted-foreground/70"
@@ -113,7 +118,7 @@ export function SessionsHistorySidebar({
             <MessageSquare className="h-5 w-5 text-muted-foreground/60" />
             <p className="text-xs text-muted-foreground">
               No sessions yet. Start one from the main panel — it will appear
-              here grouped by résumé and date.
+              here grouped by resume and date.
             </p>
           </div>
         )}
@@ -169,10 +174,7 @@ export function SessionsHistorySidebar({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setPendingDelete(null)}
-            >
+            <Button variant="outline" onClick={() => setPendingDelete(null)}>
               Cancel
             </Button>
             <Button

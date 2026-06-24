@@ -20,8 +20,8 @@ export interface Session {
   totalQuestions: number;
   status: "active" | "completed";
   createdAt: string;
-  // Parsed plain-text résumé content the BE extracted on session init. Used by the
-  // sidebar "View résumé" dialog to display the text the LLM is grading against.
+  // Parsed plain-text resume content the BE extracted on session init. Used by the
+  // sidebar "View resume" dialog to display the text the LLM is grading against.
   resumeContent?: string;
   resumeFileName?: string;
   // Round chaining: one session can extend through multiple rounds where round 2+
@@ -47,11 +47,7 @@ export interface Message {
 export type InterviewStyle = "behavioral" | "technical" | "mixed";
 export type DifficultyLevel = "easy" | "medium" | "hard";
 export type RoleLevel = "junior" | "mid" | "senior" | "lead";
-export type InterviewerPersona =
-  | "neutral"
-  | "faang"
-  | "startup"
-  | "consulting";
+export type InterviewerPersona = "neutral" | "faang" | "startup" | "consulting";
 
 export interface SessionOptions {
   interviewStyle: InterviewStyle;
@@ -300,9 +296,9 @@ export async function fetchDashboardSummary(): Promise<DashboardSummary> {
 }
 
 /**
- * Per-résumé bank — one entry per distinct résumé filename, with the full question
- * history (every question ever asked of this résumé). Backs the dashboard's "My
- * Résumés" panel and proves the "no repeated questions" claim concretely.
+ * Per-resume bank — one entry per distinct resume filename, with the full question
+ * history (every question ever asked of this resume). Backs the dashboard's "My
+ * resumes" panel and proves the "no repeated questions" claim concretely.
  */
 export interface ResumeBankEntry {
   resumeFileName: string;

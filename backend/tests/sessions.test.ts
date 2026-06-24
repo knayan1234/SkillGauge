@@ -155,7 +155,7 @@ describe("session routes", () => {
     expect(res.json().code).toBe("INVALID_FORMAT");
   });
 
-  it("rejects a legacy .doc résumé with UNSUPPORTED_RESUME_MIME (415)", async () => {
+  it("rejects a legacy .doc resume with UNSUPPORTED_RESUME_MIME (415)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/sessions",
@@ -170,7 +170,7 @@ describe("session routes", () => {
     expect(res.json().code).toBe("UNSUPPORTED_RESUME_MIME");
   });
 
-  it("rejects an empty résumé payload with RESUME_PARSE_FAILED (400)", async () => {
+  it("rejects an empty resume payload with RESUME_PARSE_FAILED (400)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/sessions",

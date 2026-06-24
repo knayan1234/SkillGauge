@@ -74,7 +74,9 @@ export function SiteFooter({
             >
               About SkillGauge
             </button>
-            <span aria-hidden="true" className="text-muted-foreground/40">·</span>
+            <span aria-hidden="true" className="text-muted-foreground/40">
+              ·
+            </span>
             <button
               type="button"
               onClick={() => setContactOpen(true)}
@@ -84,81 +86,85 @@ export function SiteFooter({
             >
               Contact
             </button>
-            <span aria-hidden="true" className="text-muted-foreground/40">·</span>
-            <span className="text-muted-foreground/50">© {BUILD_YEAR} SkillGauge</span>
-          </div>
-        </footer>
-      ) : (
-      <footer className="footer-surface" role="contentinfo">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
-          {/* Top row: brand on the left, attribution on the right. Stacks centered on
-              very small viewports so each block stays legible. */}
-          <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-3 sm:gap-4">
-            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-2.5">
-              <div className="brand-frame rounded-lg flex-shrink-0">
-                <div className="brand-frame-inner h-7 w-7 rounded-lg flex items-center justify-center">
-                  <SkillGaugeLogo size={16} className="text-amber-700" />
-                </div>
-              </div>
-              <div className="leading-tight text-center sm:text-left">
-                <p className="text-sm font-semibold text-foreground">
-                  SkillGauge
-                </p>
-                <p className="text-xs text-muted-foreground/80">
-                  Personal interview rehearsal
-                </p>
-              </div>
-            </div>
-
-            <p className="text-xs text-muted-foreground text-center sm:text-right leading-tight">
-              Built by{" "}
-              <button
-                type="button"
-                onClick={() => setAuthorOpen(true)}
-                aria-haspopup="dialog"
-                aria-expanded={authorOpen}
-                className="text-foreground font-medium underline decoration-amber-500/50 underline-offset-2 hover:text-amber-700 dark:hover:text-amber-400 hover:decoration-amber-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded"
-              >
-                Kumar Nayan
-              </button>
-              <br className="hidden sm:inline" />
-              <span className="text-muted-foreground/60">
-                © {BUILD_YEAR} · A personal project
-              </span>
-            </p>
-          </div>
-
-          {/* Thin centered nav row — visually separated from the attribution stack
-              above so "About" reads as a real footer link, not a stray button wedged
-              between brand and copyright. Border-t connects it to the row above. */}
-          <nav
-            aria-label="Footer"
-            className="mt-3 sm:mt-4 pt-3 border-t border-border/40 flex items-center justify-center gap-4 text-xs"
-          >
-            <button
-              type="button"
-              onClick={() => setAboutOpen(true)}
-              aria-haspopup="dialog"
-              aria-expanded={aboutOpen}
-              className="text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded px-1"
-            >
-              About SkillGauge
-            </button>
             <span aria-hidden="true" className="text-muted-foreground/40">
               ·
             </span>
-            <button
-              type="button"
-              onClick={() => setContactOpen(true)}
-              aria-haspopup="dialog"
-              aria-expanded={contactOpen}
-              className="text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded px-1"
+            <span className="text-muted-foreground/50">
+              © {BUILD_YEAR} SkillGauge
+            </span>
+          </div>
+        </footer>
+      ) : (
+        <footer className="footer-surface" role="contentinfo">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
+            {/* Top row: brand on the left, attribution on the right. Stacks centered on
+              very small viewports so each block stays legible. */}
+            <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-3 sm:gap-4">
+              <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-2.5">
+                <div className="brand-frame rounded-lg flex-shrink-0">
+                  <div className="brand-frame-inner h-7 w-7 rounded-lg flex items-center justify-center">
+                    <SkillGaugeLogo size={16} className="text-amber-700" />
+                  </div>
+                </div>
+                <div className="leading-tight text-center sm:text-left">
+                  <p className="text-sm font-semibold text-foreground">
+                    SkillGauge
+                  </p>
+                  <p className="text-xs text-muted-foreground/80">
+                    Personal interview rehearsal
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground text-center sm:text-right leading-tight">
+                Built by{" "}
+                <button
+                  type="button"
+                  onClick={() => setAuthorOpen(true)}
+                  aria-haspopup="dialog"
+                  aria-expanded={authorOpen}
+                  className="text-foreground font-medium underline decoration-amber-500/50 underline-offset-2 hover:text-amber-700 dark:hover:text-amber-400 hover:decoration-amber-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded"
+                >
+                  Kumar Nayan
+                </button>
+                <br className="hidden sm:inline" />
+                <span className="text-muted-foreground/60">
+                  © {BUILD_YEAR} · A personal project
+                </span>
+              </p>
+            </div>
+
+            {/* Thin centered nav row — visually separated from the attribution stack
+              above so "About" reads as a real footer link, not a stray button wedged
+              between brand and copyright. Border-t connects it to the row above. */}
+            <nav
+              aria-label="Footer"
+              className="mt-3 sm:mt-4 pt-3 border-t border-border/40 flex items-center justify-center gap-4 text-xs"
             >
-              Contact
-            </button>
-          </nav>
-        </div>
-      </footer>
+              <button
+                type="button"
+                onClick={() => setAboutOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={aboutOpen}
+                className="text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded px-1"
+              >
+                About SkillGauge
+              </button>
+              <span aria-hidden="true" className="text-muted-foreground/40">
+                ·
+              </span>
+              <button
+                type="button"
+                onClick={() => setContactOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={contactOpen}
+                className="text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded px-1"
+              >
+                Contact
+              </button>
+            </nav>
+          </div>
+        </footer>
       )}
 
       <Dialog open={aboutOpen} onOpenChange={setAboutOpen}>
@@ -190,7 +196,7 @@ export function SiteFooter({
                 />
               }
             >
-              A personal interview-practice tool. Add your résumé and a job
+              A personal interview-practice tool. Add your resume and a job
               description, and an AI interviewer asks you questions one at a
               time, scores each answer 1–10, and tells you what to improve.
             </Section>
@@ -206,7 +212,7 @@ export function SiteFooter({
             >
               <ul className="space-y-2 pl-1">
                 <Bullet label="Built around you.">
-                  Questions come from your résumé and the target role — not a
+                  Questions come from your resume and the target role — not a
                   generic bank.
                 </Bullet>
                 <Bullet label="Useful feedback.">
@@ -218,7 +224,7 @@ export function SiteFooter({
                   difficulty, until you&apos;ve got them.
                 </Bullet>
                 <Bullet label="Everything is saved.">
-                  Past sessions stay, organized by résumé and date — retry any
+                  Past sessions stay, organized by resume and date — retry any
                   answer anytime.
                 </Bullet>
               </ul>
@@ -244,14 +250,8 @@ export function SiteFooter({
                 <User className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
               }
             >
-              Kumar Nayan (
-              <a
-                href="mailto:kumarnayan.work@gmail.com"
-                className="text-primary hover:underline underline-offset-2"
-              >
-                kumarnayan.work@gmail.com
-              </a>
-              ) — a personal project, built end-to-end by one person.
+              Kumar Nayan ( ) — a personal project, built end-to-end by one
+              person.
             </Section>
           </div>
         </DialogContent>

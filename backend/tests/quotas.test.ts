@@ -3,7 +3,7 @@
  *
  * Two guards exercised:
  *   1. INPUT_TOO_LARGE — single LLM-call input exceeds MAX_INPUT_CHARS (default 10k chars).
- *      Triggered by feeding an oversize JD or résumé.
+ *      Triggered by feeding an oversize JD or resume.
  *   2. QUOTA_EXCEEDED — daily token quota reached. Simulated by directly inserting a
  *      `usage_quotas` doc with tokensUsed >= the limit before the call.
  *
@@ -22,10 +22,7 @@
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app";
 import { getDb } from "../src/db/connection";
-import {
-  utcDayKey,
-  type UsageQuotaDoc,
-} from "../src/db/repos/usageQuotas";
+import { utcDayKey, type UsageQuotaDoc } from "../src/db/repos/usageQuotas";
 import { resetDb, startMongo, stopMongo } from "./mongoHarness";
 
 const RESUME_PLAINTEXT = "Jane Doe — Senior Engineer";
@@ -81,7 +78,7 @@ describe("cost guards", () => {
   it("rejects a session-init with an oversize JD as INPUT_TOO_LARGE (413)", async () => {
     const { cookie } = await registerAndGetCookie(app, "fat-jd@example.com");
     // Default MAX_INPUT_CHARS is 10000; JD field max in zod is 10000. We send the
-    // largest JD the schema permits, which together with even a small résumé
+    // largest JD the schema permits, which together with even a small resume
     // pushes past the 10k input cap.
     const giantJd = "x".repeat(10_000);
     const res = await app.inject({
@@ -157,8 +154,11 @@ describe("cost guards", () => {
 
   it("rejects an oversize answer payload as INPUT_TOO_LARGE", async () => {
     // Schema permits answer.length up to 10000; default MAX_INPUT_CHARS is also 10000.
-    // Together with the existing résumé/JD/history this should trip the guard.
-    const { cookie } = await registerAndGetCookie(app, "long-answer@example.com");
+    // Together with the existing resume/JD/history this should trip the guard.
+    const { cookie } = await registerAndGetCookie(
+      app,
+      "long-answer@example.com",
+    );
     const init = await app.inject({
       method: "POST",
       url: "/api/sessions",

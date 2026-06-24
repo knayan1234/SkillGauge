@@ -28,7 +28,7 @@ export function SidebarSkeleton() {
       {/* "Chat history" eyebrow */}
       <Skeleton className="h-3 w-20 mb-3" />
 
-      {/* Résumé group header + 2 entries */}
+      {/* resume group header + 2 entries */}
       <div className="space-y-4">
         <div className="space-y-2">
           <Skeleton className="h-2.5 w-32" />

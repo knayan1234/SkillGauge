@@ -68,7 +68,10 @@ interface RouteParams {
   params: Promise<{ path: string[] }>;
 }
 
-async function forward(req: NextRequest, params: RouteParams["params"]): Promise<Response> {
+async function forward(
+  req: NextRequest,
+  params: RouteParams["params"],
+): Promise<Response> {
   const { path } = await params;
   // The catch-all gives us ["auth", "login"] for /api/auth/login. Re-join + preserve
   // the query string off the original URL so search params survive the proxy.
@@ -84,7 +87,7 @@ async function forward(req: NextRequest, params: RouteParams["params"]): Promise
   });
 
   // Body: forward as a stream for non-GET/HEAD methods so we don't buffer large bodies
-  // (résumé uploads can be multi-MB). For GET/HEAD, body must be omitted entirely.
+  // (resume uploads can be multi-MB). For GET/HEAD, body must be omitted entirely.
   const init: RequestInit & { duplex?: "half" } = {
     method: req.method,
     headers,
@@ -104,7 +107,10 @@ async function forward(req: NextRequest, params: RouteParams["params"]): Promise
     // rather than a generic network error. Logged server-side for observability.
     console.error("[BFF] upstream fetch failed:", err);
     return Response.json(
-      { code: "BFF_UPSTREAM_UNREACHABLE", message: "Backend service unavailable" },
+      {
+        code: "BFF_UPSTREAM_UNREACHABLE",
+        message: "Backend service unavailable",
+      },
       { status: 502 },
     );
   }

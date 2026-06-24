@@ -4,7 +4,7 @@
  * /sessions — the authenticated landing page.
  *
  * Two-pane layout:
- *   - Left rail: chatroom history grouped by résumé → day, clickable to load into the
+ *   - Left rail: chatroom history grouped by resume → day, clickable to load into the
  *     interview view. Powered by the same `GET /api/sessions` data as the in-interview
  *     sidebar; same grouping helpers from `lib/sessionGrouping.ts`.
  *   - Main panel: welcome card + prominent "Start a new interview" CTA + a recent-activity
@@ -112,7 +112,8 @@ export default function SessionsLandingPage() {
               <span className="animate-gradient-text">next interview</span>?
             </h1>
             <p className="text-base text-muted-foreground max-w-xl">
-              Start a fresh session, or pick up an old chatroom from the sidebar.
+              Start a fresh session, or pick up an old chatroom from the
+              sidebar.
             </p>
           </div>
 
@@ -133,7 +134,7 @@ export default function SessionsLandingPage() {
                   Start a fresh interview
                 </h2>
                 <p className="text-sm text-muted-foreground max-w-md">
-                  Upload a résumé, paste a job description, pick a style — and
+                  Upload a resume, paste a job description, pick a style — and
                   begin practicing in under a minute.
                 </p>
               </div>

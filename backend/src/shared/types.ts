@@ -18,7 +18,7 @@ export interface Session {
   totalQuestions: number;
   status: "active" | "completed";
   createdAt: string;
-  // Parsed plain-text résumé content the BE extracted on session init (PDF/DOCX/text
+  // Parsed plain-text resume content the BE extracted on session init (PDF/DOCX/text
   // all converge to text here). Populated on the response from POST /api/sessions so
   // the FE sidebar's "View resume" dialog can display it directly without re-parsing.
   resumeContent?: string;
@@ -48,11 +48,7 @@ export interface Message {
 export type InterviewStyle = "behavioral" | "technical" | "mixed";
 export type DifficultyLevel = "easy" | "medium" | "hard";
 export type RoleLevel = "junior" | "mid" | "senior" | "lead";
-export type InterviewerPersona =
-  | "neutral"
-  | "faang"
-  | "startup"
-  | "consulting";
+export type InterviewerPersona = "neutral" | "faang" | "startup" | "consulting";
 
 export interface SessionInitRequest {
   resumeFileName: string;

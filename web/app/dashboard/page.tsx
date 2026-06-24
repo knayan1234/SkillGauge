@@ -72,7 +72,7 @@ export default function DashboardPage() {
 
   // Dashboard reads should reflect the latest state every time the user lands on
   // this page — completing a session elsewhere should immediately bump the score
-  // trend and "My Résumés" counts here. `refetchOnMount: "always"` forces a network
+  // trend and "My resumes" counts here. `refetchOnMount: "always"` forces a network
   // call on each navigation; `refetchOnWindowFocus` catches the case where the user
   // tabs away, runs an interview, and tabs back. Stale-time stays high so rapid
   // re-renders within the same view don't thrash the network.
@@ -85,7 +85,7 @@ export default function DashboardPage() {
     refetchOnWindowFocus: true,
   });
 
-  // "My Résumés" data — separate query so the panel can render once it has its own
+  // "My resumes" data — separate query so the panel can render once it has its own
   // data without blocking on the summary aggregation. Same refresh policy as summary.
   const { data: resumeBank } = useQuery({
     queryKey: ["dashboard", "resumes"] as const,
@@ -98,9 +98,8 @@ export default function DashboardPage() {
   });
 
   const [openResume, setOpenResume] = useState<ResumeBankEntry | null>(null);
-  const [openQuestionBank, setOpenQuestionBank] = useState<ResumeBankEntry | null>(
-    null,
-  );
+  const [openQuestionBank, setOpenQuestionBank] =
+    useState<ResumeBankEntry | null>(null);
 
   if (authLoading || (isAuthenticated && isLoading)) {
     return (
@@ -158,7 +157,9 @@ export default function DashboardPage() {
     <AppLayout>
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-6 sm:space-y-8 stagger-fade">
         <header>
-          <h1 className="text-2xl font-semibold text-foreground">Your progress</h1>
+          <h1 className="text-2xl font-semibold text-foreground">
+            Your progress
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
             A glance at where your interview prep stands.
           </p>
@@ -191,9 +192,7 @@ export default function DashboardPage() {
           </Card>
           <StatCard
             label="Best score"
-            value={
-              stats.bestScore !== null ? stats.bestScore.toString() : "—"
-            }
+            value={stats.bestScore !== null ? stats.bestScore.toString() : "—"}
           />
         </section>
 
@@ -233,10 +232,7 @@ export default function DashboardPage() {
                     const count = styleBreakdown[key];
                     const pct = Math.round((count / totalStyleSessions) * 100);
                     return (
-                      <li
-                        key={key}
-                        className="flex items-center gap-3 text-sm"
-                      >
+                      <li key={key} className="flex items-center gap-3 text-sm">
                         <span className="w-24 shrink-0 text-foreground">
                           {label}
                         </span>
@@ -259,8 +255,8 @@ export default function DashboardPage() {
           </Card>
         </section>
 
-        {/* My Résumés — one entry per distinct résumé filename the user has uploaded.
-            Always-render. Empty state when no sessions; otherwise list with View résumé
+        {/* My resumes — one entry per distinct resume filename the user has uploaded.
+            Always-render. Empty state when no sessions; otherwise list with View resume
             + Question bank actions. Backs the "no repeats" claim concretely. */}
         <section>
           <Card>
@@ -274,14 +270,14 @@ export default function DashboardPage() {
                     />
                   </span>
                 </span>
-                My résumés
+                My resumes
               </CardTitle>
             </CardHeader>
             <CardContent>
               {!resumeBank || resumeBank.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Upload a résumé in your first session and it&apos;ll appear
-                  here. Each résumé carries its own question bank — every
+                  Upload a resume in your first session and it&apos;ll appear
+                  here. Each resume carries its own question bank — every
                   question we&apos;ve ever asked of it, never repeated.
                 </p>
               ) : (
@@ -313,13 +309,10 @@ export default function DashboardPage() {
                             size="sm"
                             onClick={() => setOpenResume(r)}
                             className="gap-1.5"
-                            aria-label={`View résumé content for ${r.resumeFileName}`}
+                            aria-label={`View resume content for ${r.resumeFileName}`}
                           >
-                            <Eye
-                              className="h-3.5 w-3.5"
-                              aria-hidden="true"
-                            />
-                            View résumé
+                            <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                            View resume
                           </Button>
                           <Button
                             variant="outline"
@@ -466,7 +459,7 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      {/* Résumé content viewer */}
+      {/* resume content viewer */}
       <Dialog
         open={openResume !== null}
         onOpenChange={(open) => !open && setOpenResume(null)}
@@ -474,11 +467,11 @@ export default function DashboardPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="truncate">
-              {openResume?.resumeFileName ?? "Résumé"}
+              {openResume?.resumeFileName ?? "resume"}
             </DialogTitle>
             <DialogDescription>
               Parsed text the LLM grades against. Update or replace by uploading
-              a fresh résumé in your next session.
+              a fresh resume in your next session.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[60vh] overflow-y-auto rounded-md border border-border bg-muted/30 p-3 text-xs whitespace-pre-wrap font-mono">
@@ -487,7 +480,7 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Question bank — every question ever asked of this résumé, in order. */}
+      {/* Question bank — every question ever asked of this resume, in order. */}
       <Dialog
         open={openQuestionBank !== null}
         onOpenChange={(open) => !open && setOpenQuestionBank(null)}
@@ -500,15 +493,16 @@ export default function DashboardPage() {
                 aria-hidden="true"
               />
               <span className="truncate">
-                Question bank — {openQuestionBank?.resumeFileName ?? "résumé"}
+                Question bank — {openQuestionBank?.resumeFileName ?? "resume"}
               </span>
             </DialogTitle>
             <DialogDescription>
               {openQuestionBank?.questions.length ?? 0} unique question
               {openQuestionBank?.questions.length === 1 ? "" : "s"} asked across{" "}
               {openQuestionBank?.sessionCount ?? 0} session
-              {openQuestionBank?.sessionCount === 1 ? "" : "s"}. Future questions
-              skip everything in this list — the system never repeats itself.
+              {openQuestionBank?.sessionCount === 1 ? "" : "s"}. Future
+              questions skip everything in this list — the system never repeats
+              itself.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[60vh] overflow-y-auto rounded-md border border-border/60 bg-muted/20 p-1">

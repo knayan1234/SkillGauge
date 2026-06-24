@@ -8,7 +8,7 @@
  * Middleware order matters and is fixed here:
  *   1. pino-http  — request logger; attaches `req.log` for downstream handlers
  *   2. cors       — must run before body parsing so OPTIONS preflights short-circuit
- *   3. express.json — body parser; bumped to 10 MB for résumé uploads (base64-encoded
+ *   3. express.json — body parser; bumped to 10 MB for resume uploads (base64-encoded
  *                     PDFs and DOCX can run hot)
  *   4. cookie-parser — populates req.cookies from the Cookie header
  *   5. routes (health, auth, sessions) — each mounts under /api/*
@@ -16,7 +16,12 @@
  *   7. error handler — single funnel for thrown / next(err) errors
  */
 
-import express, { type Application, type NextFunction, type Request, type Response } from "express";
+import express, {
+  type Application,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import pinoHttp from "pino-http";
@@ -64,7 +69,7 @@ export async function buildApp(): Promise<Application> {
     }),
   );
 
-  // 10 MB is comfortably above any realistic résumé/JD payload (a base64-encoded 5 MB PDF
+  // 10 MB is comfortably above any realistic resume/JD payload (a base64-encoded 5 MB PDF
   // is ~7 MB on the wire). Tighter caps risk legitimate uploads being rejected.
   app.use(express.json({ limit: "10mb" }));
   app.use(cookieParser());

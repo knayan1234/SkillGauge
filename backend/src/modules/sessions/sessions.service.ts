@@ -2,7 +2,11 @@ import { randomUUID } from "node:crypto";
 import { env } from "@/config/env";
 import { sessionsRepo, type SessionDoc } from "@/db/repos/sessions";
 import { messagesRepo, type MessageDoc } from "@/db/repos/messages";
-import { memoriesRepo, type MemoryDoc, type MemoryKind } from "@/db/repos/memories";
+import {
+  memoriesRepo,
+  type MemoryDoc,
+  type MemoryKind,
+} from "@/db/repos/memories";
 import { usageQuotasRepo } from "@/db/repos/usageQuotas";
 import { createLLMClient } from "@/llm/index";
 import { getEmbeddingsClient } from "@/llm/embeddings";
@@ -42,7 +46,7 @@ export class SessionError extends Error {
  *
  * Daily-token check uses today's UTC quota doc (auto-created on first use). The
  * input-length check is a flat character cap on whatever we're about to feed the
- * LLM — concatenated résumé + JD + answer history + the rendered prompt.
+ * LLM — concatenated resume + JD + answer history + the rendered prompt.
  */
 async function ensureUnderQuotaAndLength(
   userId: string,
@@ -51,7 +55,7 @@ async function ensureUnderQuotaAndLength(
   if (inputChars > env.MAX_INPUT_CHARS) {
     throw new SessionError(
       "INPUT_TOO_LARGE",
-      `Input exceeds the per-call cap of ${env.MAX_INPUT_CHARS} characters. Trim your résumé or answer.`,
+      `Input exceeds the per-call cap of ${env.MAX_INPUT_CHARS} characters. Trim your resume or answer.`,
     );
   }
   const used = await usageQuotasRepo.getCurrentTokens(userId);
@@ -154,7 +158,10 @@ function toApiMessage(doc: MessageDoc): Message {
 function ctxFromSession(
   doc: SessionDoc,
   questionIndex: number,
-  previousMessages: ReadonlyArray<{ type: MessageDoc["type"]; content: string }>,
+  previousMessages: ReadonlyArray<{
+    type: MessageDoc["type"];
+    content: string;
+  }>,
   pastQuestionsForResume: ReadonlyArray<string> = [],
 ) {
   return {
@@ -174,7 +181,7 @@ function ctxFromSession(
 }
 
 /**
- * Load every question this user has ever been asked on the same résumé (across all
+ * Load every question this user has ever been asked on the same resume (across all
  * past sessions). Backs the "no repeats" guard in the question generator: the prompt
  * renderer pipes this list in as a "do not repeat" instruction. Best-effort: a query
  * failure returns an empty list rather than blocking the chat path — non-repetition
@@ -185,7 +192,10 @@ async function loadPastQuestionsForResume(
   resumeFileName: string,
 ): Promise<string[]> {
   try {
-    const rows = await messagesRepo.findQuestionsByResume(userId, resumeFileName);
+    const rows = await messagesRepo.findQuestionsByResume(
+      userId,
+      resumeFileName,
+    );
     return rows.map((r) => r.content);
   } catch {
     return [];
@@ -273,7 +283,7 @@ export const sessionsService = {
     };
     await sessionsRepo.create(sessionDoc);
 
-    // Cost guards before the first LLM call. Input length = résumé + JD only; the
+    // Cost guards before the first LLM call. Input length = resume + JD only; the
     // history is empty on initialise.
     await ensureUnderQuotaAndLength(
       userId,
@@ -289,7 +299,11 @@ export const sessionsService = {
     // Account for tokens. Stub returns no usage data; estimate from input + output.
     await usageQuotasRepo.recordCall(
       userId,
-      estimateTokens(sessionDoc.resumeContent, sessionDoc.jobDescription, firstContent),
+      estimateTokens(
+        sessionDoc.resumeContent,
+        sessionDoc.jobDescription,
+        firstContent,
+      ),
     );
     const firstDoc: MessageDoc = {
       _id: randomUUID(),
@@ -355,7 +369,7 @@ export const sessionsService = {
     const previousMessages = (await messagesRepo.listBySession(sessionId)).map(
       (m) => ({ type: m.type, content: m.content }),
     );
-    // Cost guards. Input length sums résumé + JD + concatenated message history so
+    // Cost guards. Input length sums resume + JD + concatenated message history so
     // a runaway transcript can't blow past the per-call cap.
     const historyChars = previousMessages.reduce(
       (sum, m) => sum + m.content.length,
@@ -570,7 +584,7 @@ export const sessionsService = {
    *
    * Why this isn't `POST /api/sessions` again: the user explicitly chose option B —
    * one session, one growing transcript, ramped difficulty across rounds. Creating a
-   * brand-new session would lose that thread. Same résumé, same JD, same options;
+   * brand-new session would lose that thread. Same resume, same JD, same options;
    * only the round counter and the cumulative `totalQuestions` change.
    *
    * Idempotency: if the session is already active (e.g., a duplicate click after the

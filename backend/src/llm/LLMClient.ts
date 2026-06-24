@@ -19,7 +19,7 @@ export interface QuestionContext {
   roleLevel: RoleLevel;
   focusAreas?: string;
   // Round number this question is being generated for. Round 1 is the default; round 2+
-  // means the user has already completed at least one full round on this same résumé/JD,
+  // means the user has already completed at least one full round on this same resume/JD,
   // so the prompt should ramp difficulty and reference patterns from prior answers.
   currentRound?: number;
   // Interviewer flavour. Defaults to `neutral` (no extra prompt content).
@@ -30,9 +30,9 @@ export interface QuestionContext {
   }>;
   /**
    * Every question this user has been asked across ALL of their sessions on this same
-   * résumé. The renderer pipes these into the prompt as an explicit "do not repeat"
+   * resume. The renderer pipes these into the prompt as an explicit "do not repeat"
    * list so the LLM doesn't regurgitate questions from prior chatrooms — the
-   * differentiator that "every question stored per résumé, no repeats" is real.
+   * differentiator that "every question stored per resume, no repeats" is real.
    * Truncated by the renderer if the list grows large; capped to recent N to stay
    * under the per-call token budget.
    */

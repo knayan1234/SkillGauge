@@ -36,12 +36,22 @@ import { ChatSkeleton } from "@/features/interview/ChatSkeleton";
 import { SidebarSkeleton } from "@/features/interview/SidebarSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CompletionCard } from "@/features/interview/CompletionCard";
-import { RetryDialog, type RetryTarget } from "@/features/interview/RetryDialog";
+import {
+  RetryDialog,
+  type RetryTarget,
+} from "@/features/interview/RetryDialog";
 import { useSession } from "@/hooks/useSession";
 import { useAuth } from "@/hooks/useAuth";
 import { STORAGE_KEYS } from "@/lib/storageKeys";
-import { findQuestionForFeedback, sortByTimestamp } from "@/lib/interviewMessages";
-import { reanswerQuestion, type Message, type SessionOptions } from "@/services/api";
+import {
+  findQuestionForFeedback,
+  sortByTimestamp,
+} from "@/lib/interviewMessages";
+import {
+  reanswerQuestion,
+  type Message,
+  type SessionOptions,
+} from "@/services/api";
 
 export default function InterviewPage() {
   // useSearchParams forces this page into a Suspense boundary in Next 16. The wrapper
@@ -76,7 +86,7 @@ function InterviewPageBody() {
   // value is purely a side-effect guard inside the bootstrap effect — it doesn't drive
   // any rendered output, and refs avoid the cascading-render lint rule.
   const loadedSessionIdRef = useRef<string | null>(null);
-  // Résumé filename for the sidebar's "Resume in use" card. State only when we're
+  // resume filename for the sidebar's "Resume in use" card. State only when we're
   // running the new-session path (we set it before the session itself exists). For past
   // sessions loaded from the BE we derive directly from `session.resumeFileName`.
   const [bootstrapResumeFileName, setBootstrapResumeFileName] = useState<
@@ -109,7 +119,7 @@ function InterviewPageBody() {
 
   // Two bootstrap paths, picked once per visit:
   //   A. ?session=<id> in the URL → hydrate from the BE (past session click).
-  //   B. no URL param → existing flow: read résumé+JD+options from sessionStorage that
+  //   B. no URL param → existing flow: read resume+JD+options from sessionStorage that
   //      the setup form put there, then POST /api/sessions to start a new session.
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -190,7 +200,7 @@ function InterviewPageBody() {
     loadFromServer,
   ]);
 
-  // Résumé filename shown by the sidebar's "Resume in use" card. For past-session loads
+  // resume filename shown by the sidebar's "Resume in use" card. For past-session loads
   // we derive directly from the BE's session doc; for new sessions we use the value the
   // bootstrap effect lifted out of sessionStorage. Derived rather than mirrored to keep
   // data flow one-way.
@@ -294,7 +304,7 @@ function InterviewPageBody() {
           sessionTitle={session.title}
           resumeFileName={resumeFileName}
           // BE returns the parsed plain text on session init. We display it in the
-          // "View résumé" dialog so users see what the LLM is grading against.
+          // "View resume" dialog so users see what the LLM is grading against.
           resumeContent={session.resumeContent ?? null}
           isActive={!isComplete}
         />

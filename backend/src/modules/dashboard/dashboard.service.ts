@@ -39,19 +39,19 @@ export interface DashboardSummary {
 }
 
 /**
- * Per-résumé bank record. One entry per distinct résumé filename the user has used.
- * Backs the dashboard's "My Résumés" panel + question-bank modal.
+ * Per-resume bank record. One entry per distinct resume filename the user has used.
+ * Backs the dashboard's "My resumes" panel + question-bank modal.
  */
 export interface ResumeBankEntry {
   resumeFileName: string;
-  /** Latest parsed résumé text — useful for the "View résumé" modal. */
+  /** Latest parsed resume text — useful for the "View resume" modal. */
   resumeContent: string;
   sessionCount: number;
-  /** Distinct question texts asked across all sessions on this résumé, oldest first. */
+  /** Distinct question texts asked across all sessions on this resume, oldest first. */
   questions: Array<{ content: string; createdAt: string; sessionId: string }>;
-  /** Average rubric score across every graded answer on this résumé, or null if none. */
+  /** Average rubric score across every graded answer on this resume, or null if none. */
   averageScore: number | null;
-  /** ISO timestamp of the most recent session start on this résumé. */
+  /** ISO timestamp of the most recent session start on this resume. */
   lastUsed: string;
 }
 
@@ -59,23 +59,94 @@ export interface ResumeBankEntry {
 // boilerplate that drowns out useful phrases. Curated rather than NLP-derived because
 // we're aggregating English-only feedback strings of bounded vocabulary.
 const STOPWORDS = new Set<string>([
-  "the", "a", "an", "and", "or", "but", "your", "you", "to", "of", "in", "on", "at",
-  "by", "for", "with", "be", "is", "are", "was", "were", "should", "could", "would",
-  "more", "less", "very", "also", "this", "that", "those", "these", "it", "its",
-  "their", "they", "them", "we", "us", "our", "answer", "question", "candidate",
-  "feedback", "explain", "explanation", "clearer", "clearly", "concrete", "specific",
-  "details", "detail", "example", "examples", "consider", "try", "instead", "rather",
-  "without", "within", "about", "into", "from", "than", "then", "while", "as",
-  "have", "has", "had", "do", "does", "did", "can", "may", "might", "will",
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "but",
+  "your",
+  "you",
+  "to",
+  "of",
+  "in",
+  "on",
+  "at",
+  "by",
+  "for",
+  "with",
+  "be",
+  "is",
+  "are",
+  "was",
+  "were",
+  "should",
+  "could",
+  "would",
+  "more",
+  "less",
+  "very",
+  "also",
+  "this",
+  "that",
+  "those",
+  "these",
+  "it",
+  "its",
+  "their",
+  "they",
+  "them",
+  "we",
+  "us",
+  "our",
+  "answer",
+  "question",
+  "candidate",
+  "feedback",
+  "explain",
+  "explanation",
+  "clearer",
+  "clearly",
+  "concrete",
+  "specific",
+  "details",
+  "detail",
+  "example",
+  "examples",
+  "consider",
+  "try",
+  "instead",
+  "rather",
+  "without",
+  "within",
+  "about",
+  "into",
+  "from",
+  "than",
+  "then",
+  "while",
+  "as",
+  "have",
+  "has",
+  "had",
+  "do",
+  "does",
+  "did",
+  "can",
+  "may",
+  "might",
+  "will",
 ]);
 
 function tokenize(s: string): string[] {
-  return s
-    .toLowerCase()
-    // Strip everything that's not a-z or whitespace; collapse to single spaces.
-    .replace(/[^a-z\s]+/g, " ")
-    .split(/\s+/)
-    .filter((t) => t.length >= 4 && !STOPWORDS.has(t));
+  return (
+    s
+      .toLowerCase()
+      // Strip everything that's not a-z or whitespace; collapse to single spaces.
+      .replace(/[^a-z\s]+/g, " ")
+      .split(/\s+/)
+      .filter((t) => t.length >= 4 && !STOPWORDS.has(t))
+  );
 }
 
 type SessionSummaryRow = {
@@ -103,7 +174,10 @@ export const dashboardService = {
     // Pull session id + interviewStyle in one round-trip — both are needed below.
     const userSessions = await sessions
       .find({ userId })
-      .project<{ _id: string; interviewStyle: SessionSummaryRow["interviewStyle"] }>({
+      .project<{
+        _id: string;
+        interviewStyle: SessionSummaryRow["interviewStyle"];
+      }>({
         _id: 1,
         interviewStyle: 1,
       })
@@ -147,7 +221,9 @@ export const dashboardService = {
       .toArray();
 
     const answers = userMessages.filter((m) => m.type === "answer");
-    const feedbacks = userMessages.filter((m) => m.type === "feedback" && m.feedback);
+    const feedbacks = userMessages.filter(
+      (m) => m.type === "feedback" && m.feedback,
+    );
 
     const scores = feedbacks
       .map((f) => f.feedback?.score ?? null)
@@ -156,7 +232,8 @@ export const dashboardService = {
     const averageScore =
       scores.length === 0
         ? null
-        : Math.round((scores.reduce((s, n) => s + n, 0) / scores.length) * 10) / 10;
+        : Math.round((scores.reduce((s, n) => s + n, 0) / scores.length) * 10) /
+          10;
     const bestScore = scores.length === 0 ? null : Math.max(...scores);
 
     const scoreTrend = feedbacks
@@ -196,10 +273,10 @@ export const dashboardService = {
   },
 
   /**
-   * "My Résumés" data — one entry per distinct résumé filename the user has uploaded.
-   * For each résumé we surface the canonical content (latest version), session count,
+   * "My resumes" data — one entry per distinct resume filename the user has uploaded.
+   * For each resume we surface the canonical content (latest version), session count,
    * average score, last-used timestamp, and the full question bank (every question
-   * ever asked on this résumé, ordered chronologically). The question bank is the
+   * ever asked on this resume, ordered chronologically). The question bank is the
    * concrete proof of "no repeated questions" — users can scroll the list and see
    * every angle the system has already covered.
    */
@@ -233,8 +310,8 @@ export const dashboardService = {
 
     if (userSessions.length === 0) return [];
 
-    // Group sessions by résumé filename. Latest session's content wins as canonical
-    // (the user may have edited the résumé between sessions on the same filename).
+    // Group sessions by resume filename. Latest session's content wins as canonical
+    // (the user may have edited the resume between sessions on the same filename).
     const groups = new Map<
       string,
       {
@@ -261,7 +338,9 @@ export const dashboardService = {
     }
 
     // Pull every question + every feedback for these sessions in a single query.
-    const allSessionIds = Array.from(groups.values()).flatMap((g) => g.sessionIds);
+    const allSessionIds = Array.from(groups.values()).flatMap(
+      (g) => g.sessionIds,
+    );
     const relevantMessages = await messages
       .find({
         sessionId: { $in: allSessionIds },
@@ -270,7 +349,7 @@ export const dashboardService = {
       .sort({ createdAt: 1 })
       .toArray();
 
-    // Bucket messages by their session, then by résumé.
+    // Bucket messages by their session, then by resume.
     const bySessionId = new Map<string, typeof relevantMessages>();
     for (const m of relevantMessages) {
       const arr = bySessionId.get(m.sessionId) ?? [];
@@ -291,7 +370,10 @@ export const dashboardService = {
               createdAt: m.createdAt,
               sessionId,
             });
-          } else if (m.type === "feedback" && typeof m.feedback?.score === "number") {
+          } else if (
+            m.type === "feedback" &&
+            typeof m.feedback?.score === "number"
+          ) {
             scores.push(m.feedback.score);
           }
         }
@@ -316,7 +398,7 @@ export const dashboardService = {
       });
     }
 
-    // Newest résumé first.
+    // Newest resume first.
     result.sort((a, b) => b.lastUsed.localeCompare(a.lastUsed));
     return result;
   },

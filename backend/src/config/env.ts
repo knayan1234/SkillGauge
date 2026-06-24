@@ -10,9 +10,7 @@ const schema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   HOST: z.string().default("127.0.0.1"),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
-  JWT_SECRET: z
-    .string()
-    .min(32, "JWT_SECRET must be at least 32 characters"),
+  JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   // Session lifetime in days. 7 matches the prior hardcoded default.
   JWT_TTL_DAYS: z.coerce.number().int().positive().default(7),
   // Password reset token lifetime in minutes. 30 is the industry default — long enough
@@ -30,7 +28,9 @@ const schema = z.object({
   // Mongo connection string. Tests override at runtime with mongodb-memory-server.
   MONGODB_URI: z.string().default("mongodb://127.0.0.1:27017"),
   MONGODB_DB: z.string().default("skillgauge"),
-  LLM_PROVIDER: z.enum(["stub", "openai", "anthropic", "gemini"]).default("stub"),
+  LLM_PROVIDER: z
+    .enum(["stub", "openai", "anthropic", "gemini"])
+    .default("stub"),
   // Real-provider configuration. All optional at the schema level — the factory in
   // `src/llm/index.ts` enforces "key required when provider selects this adapter" with
   // a clear startup error so a missing key fails fast instead of silently falling back.
@@ -62,7 +62,7 @@ const schema = z.object({
   //   ~25 grading calls on gpt-4o-mini at typical question/answer lengths.
   // - MAX_INPUT_CHARS: hard cap on the total characters fed into a single LLM call.
   //   Defends against abusive payloads that would burn budget without producing signal.
-  //   Sized for a realistic prompt: ~10K résumé + ~5K JD + ~30K rolling question
+  //   Sized for a realistic prompt: ~10K resume + ~5K JD + ~30K rolling question
   //   history (round 4+) + ~5K rendered prompt scaffolding ≈ 50K. Gemini's 1M-token
   //   context handles this trivially; OpenAI/Anthropic are fine too.
   DAILY_TOKEN_LIMIT: z.coerce.number().int().positive().default(100_000),

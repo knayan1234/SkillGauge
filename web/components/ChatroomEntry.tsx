@@ -12,7 +12,7 @@
  *   - Active entry gets a tinted background + a subtle dot indicator so the user knows
  *     which chatroom is the one they're currently in.
  *   - Resume filename rides under the title in muted text — it's the primary grouping
- *     dimension users navigate by ("which interview was for which résumé?").
+ *     dimension users navigate by ("which interview was for which resume?").
  *   - Date in human-relative form ("2 hours ago", "Yesterday") via formatRelative.
  *   - The whole Card is a button when an onClick is provided. Without one (today's
  *     archived entries — there's no real session to load yet), it renders as a static
@@ -129,7 +129,7 @@ export function ChatroomEntry({
           onClick={() => onSelect(id)}
           aria-current={isActive ? "true" : undefined}
           aria-label={`Open ${title} session${
-            resumeFileName ? ` for résumé ${resumeFileName}` : ""
+            resumeFileName ? ` for resume ${resumeFileName}` : ""
           }`}
           className="w-full text-left rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
@@ -154,10 +154,7 @@ export function ChatroomEntry({
   }
   return (
     <div className="relative group">
-      <Card
-        className={className}
-        aria-current={isActive ? "true" : undefined}
-      >
+      <Card className={className} aria-current={isActive ? "true" : undefined}>
         {content}
       </Card>
       {showDelete && (

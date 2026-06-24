@@ -5,8 +5,8 @@
  * response uses the project-wide `{code, message}` shape. The error codes here let
  * the FE branch on machine-readable identifiers instead of parsing strings:
  *   - INVALID_FORMAT             (400) — zod parse failure on body or :index path param
- *   - RESUME_PARSE_FAILED        (400) — uploaded résumé bytes couldn't be decoded
- *   - UNSUPPORTED_RESUME_MIME    (415) — résumé MIME isn't one we can parse
+ *   - RESUME_PARSE_FAILED        (400) — uploaded resume bytes couldn't be decoded
+ *   - UNSUPPORTED_RESUME_MIME    (415) — resume MIME isn't one we can parse
  *   - SESSION_NOT_FOUND          (404) — id doesn't resolve to a session, or its current
  *                                        question slot is missing (corrupt state)
  *   - SESSION_FORBIDDEN          (403) — session belongs to another user
@@ -16,7 +16,13 @@
  *   - INPUT_TOO_LARGE            (413) — single LLM call's input exceeded MAX_INPUT_CHARS
  */
 
-import { Router, type Application, type NextFunction, type Request, type Response } from "express";
+import {
+  Router,
+  type Application,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import { requireAuth } from "@/plugins/auth";
 import { answerSchema, initSessionSchema } from "@/shared/contracts";
 import { SessionError, sessionsService } from "./sessions.service";
@@ -24,8 +30,9 @@ import { SessionError, sessionsService } from "./sessions.service";
 // Same wrap helper used in auth.routes.ts. Express 5 supports Promise rejection
 // natively, but wrapping makes intent obvious and tolerates synchronous throws too.
 type AsyncHandler = (req: Request, res: Response) => Promise<void | Response>;
-const wrap = (fn: AsyncHandler) => (req: Request, res: Response, next: NextFunction) =>
-  Promise.resolve(fn(req, res)).catch(next);
+const wrap =
+  (fn: AsyncHandler) => (req: Request, res: Response, next: NextFunction) =>
+    Promise.resolve(fn(req, res)).catch(next);
 
 export function sessionRoutes(app: Application): void {
   const router = Router();
@@ -58,7 +65,10 @@ export function sessionRoutes(app: Application): void {
         if (err instanceof SessionError) {
           res
             .status(statusForSessionError(err.code))
-            .json({ code: codeForSessionError(err.code), message: err.message });
+            .json({
+              code: codeForSessionError(err.code),
+              message: err.message,
+            });
           return;
         }
         throw err;
@@ -87,7 +97,10 @@ export function sessionRoutes(app: Application): void {
         if (err instanceof SessionError) {
           res
             .status(statusForSessionError(err.code))
-            .json({ code: codeForSessionError(err.code), message: err.message });
+            .json({
+              code: codeForSessionError(err.code),
+              message: err.message,
+            });
           return;
         }
         throw err;
@@ -101,7 +114,10 @@ export function sessionRoutes(app: Application): void {
       // Express 5 widens req.params values to `string | string[]` to accommodate the
       // new wildcard matcher (`*` / `**`). Our paths only use single-segment `:name`
       // captures, which always resolve to `string`, so we narrow once here.
-      const { id, index: indexParam } = req.params as { id: string; index: string };
+      const { id, index: indexParam } = req.params as {
+        id: string;
+        index: string;
+      };
       const index = Number.parseInt(indexParam, 10);
       if (!Number.isInteger(index) || index < 0) {
         res.status(400).json({
@@ -111,17 +127,16 @@ export function sessionRoutes(app: Application): void {
         return;
       }
       try {
-        const msg = await sessionsService.getQuestion(
-          req.userId!,
-          id,
-          index,
-        );
+        const msg = await sessionsService.getQuestion(req.userId!, id, index);
         res.json(msg);
       } catch (err) {
         if (err instanceof SessionError) {
           res
             .status(statusForSessionError(err.code))
-            .json({ code: codeForSessionError(err.code), message: err.message });
+            .json({
+              code: codeForSessionError(err.code),
+              message: err.message,
+            });
           return;
         }
         throw err;
@@ -167,7 +182,10 @@ export function sessionRoutes(app: Application): void {
         if (err instanceof SessionError) {
           res
             .status(statusForSessionError(err.code))
-            .json({ code: codeForSessionError(err.code), message: err.message });
+            .json({
+              code: codeForSessionError(err.code),
+              message: err.message,
+            });
           return;
         }
         throw err;
@@ -186,7 +204,10 @@ export function sessionRoutes(app: Application): void {
         if (err instanceof SessionError) {
           res
             .status(statusForSessionError(err.code))
-            .json({ code: codeForSessionError(err.code), message: err.message });
+            .json({
+              code: codeForSessionError(err.code),
+              message: err.message,
+            });
           return;
         }
         throw err;
@@ -207,7 +228,10 @@ export function sessionRoutes(app: Application): void {
         if (err instanceof SessionError) {
           res
             .status(statusForSessionError(err.code))
-            .json({ code: codeForSessionError(err.code), message: err.message });
+            .json({
+              code: codeForSessionError(err.code),
+              message: err.message,
+            });
           return;
         }
         throw err;
@@ -238,7 +262,10 @@ export function sessionRoutes(app: Application): void {
         if (err instanceof SessionError) {
           res
             .status(statusForSessionError(err.code))
-            .json({ code: codeForSessionError(err.code), message: err.message });
+            .json({
+              code: codeForSessionError(err.code),
+              message: err.message,
+            });
           return;
         }
         throw err;

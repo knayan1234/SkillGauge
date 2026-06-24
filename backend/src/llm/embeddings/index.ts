@@ -52,7 +52,7 @@
  *
  *   What changes once it's live: when generating a question, the system can
  *   search the user's past memories for content semantically similar to the
- *   current context (résumé, JD, recent answers) and feed the top matches into
+ *   current context (resume, JD, recent answers) and feed the top matches into
  *   the prompt. The LLM then references those past struggles by topic, not by
  *   keyword — true cross-session continuity. Without the index this code path
  *   throws on `$vectorSearch`, which we catch and degrade gracefully (no

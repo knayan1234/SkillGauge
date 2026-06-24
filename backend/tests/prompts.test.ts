@@ -4,7 +4,7 @@
  * Pin down:
  *   - PROMPT_VERSION is "v1" (anything storing this on a message must use the export)
  *   - renderGenerateQuestion produces non-empty system + user with key context fields
- *     interpolated (résumé, JD, role label, difficulty)
+ *     interpolated (resume, JD, role label, difficulty)
  *   - renderGradeAnswer produces a system + user + a usable responseSchema
  *   - gradeResponseSchema rejects out-of-bounds scores and empty strengths
  *   - Recent-answers summary is included only when prior answers exist
@@ -47,7 +47,7 @@ describe("renderGenerateQuestion (v1)", () => {
     expect(out.user.length).toBeGreaterThan(50);
   });
 
-  it("interpolates the résumé, JD, role label, and difficulty into the user prompt", () => {
+  it("interpolates the resume, JD, role label, and difficulty into the user prompt", () => {
     const out = renderGenerateQuestion(baseCtx);
     expect(out.user).toContain("Jane Doe");
     expect(out.user).toContain("payments platform");
@@ -82,7 +82,9 @@ describe("renderGenerateQuestion (v1)", () => {
 
   it("instructs the model to output a single bare question (no preamble)", () => {
     const out = renderGenerateQuestion(baseCtx);
-    expect(out.system.toLowerCase()).toMatch(/no preamble|stand alone|single interview question/i);
+    expect(out.system.toLowerCase()).toMatch(
+      /no preamble|stand alone|single interview question/i,
+    );
   });
 });
 

@@ -42,16 +42,16 @@ export const DAY_BUCKET_ORDER = [
 
 export interface ResumeGroup {
   resumeFileName: string;
-  /** Most-recent createdAt across this résumé's entries — drives group ordering. */
+  /** Most-recent createdAt across this resume's entries — drives group ordering. */
   latest: number;
   /** Entries grouped by day-bucket, in DAY_BUCKET_ORDER. */
   buckets: { label: string; entries: ChatroomEntryData[] }[];
 }
 
 /**
- * Group chatrooms by résumé first, then by day bucket within each résumé. Returns groups
+ * Group chatrooms by resume first, then by day bucket within each resume. Returns groups
  * sorted by recency (most-recent activity first) so the active interview lands at the top.
- * Entries with no résumé filename collapse into a "No résumé" group at the end.
+ * Entries with no resume filename collapse into a "No resume" group at the end.
  */
 export function groupSessionsByResumeAndDay(
   chatrooms: ChatroomEntryData[],
@@ -59,7 +59,7 @@ export function groupSessionsByResumeAndDay(
 ): ResumeGroup[] {
   const byResume = new Map<string, ChatroomEntryData[]>();
   for (const c of chatrooms) {
-    const key = c.resumeFileName ?? "No résumé";
+    const key = c.resumeFileName ?? "No resume";
     const list = byResume.get(key) ?? [];
     list.push(c);
     byResume.set(key, list);
@@ -91,14 +91,10 @@ export function groupSessionsByResumeAndDay(
     groups.push({ resumeFileName, latest, buckets });
   }
 
-  // Active résumé (= one with the live entry) goes first; others by recency.
+  // Active resume (= one with the live entry) goes first; others by recency.
   return groups.sort((a, b) => {
-    const aHasLive = a.buckets.some((b) =>
-      b.entries.some((e) => e.isActive),
-    );
-    const bHasLive = b.buckets.some((b) =>
-      b.entries.some((e) => e.isActive),
-    );
+    const aHasLive = a.buckets.some((b) => b.entries.some((e) => e.isActive));
+    const bHasLive = b.buckets.some((b) => b.entries.some((e) => e.isActive));
     if (aHasLive !== bHasLive) return aHasLive ? -1 : 1;
     return b.latest - a.latest;
   });

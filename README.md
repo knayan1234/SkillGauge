@@ -1,16 +1,16 @@
 # SkillGauge
 
-AI-powered interview-prep platform. Upload a résumé + job description, pick a style/difficulty/persona, and an AI interviewer asks questions one at a time — scoring each answer 1–10 with strengths and improvements. Sessions are saved, questions never repeat per résumé, difficulty ramps across rounds, and progress is tracked on a dashboard.
+AI-powered interview-prep platform. Upload a resume + job description, pick a style/difficulty/persona, and an AI interviewer asks questions one at a time — scoring each answer 1–10 with strengths and improvements. Sessions are saved, questions never repeat per resume, difficulty ramps across rounds, and progress is tracked on a dashboard.
 
 ---
 
 ## What it does
 
-- Upload a résumé (PDF / DOCX / text) + paste a target job description
+- Upload a resume (PDF / DOCX / text) + paste a target job description
 - AI interviewer asks context-aware questions one at a time (behavioral / technical / mixed; persona-flavored)
 - Each answer scored 1–10 with strengths + improvements (rubric grading)
 - Round chaining (difficulty ramps, weak areas carried forward); re-answer any question
-- Per-résumé question bank with a **no-repeat** guarantee
+- Per-resume question bank with a **no-repeat** guarantee
 - Dashboard: score trend, weak areas, practice mix; client-side PDF export; voice (mic) + text-to-speech
 - Long-term memory via vector embeddings (Atlas Vector Search)
 

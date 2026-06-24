@@ -3,13 +3,20 @@
  * data the `/dashboard` page renders. Auth-required (every metric is per-user).
  */
 
-import { Router, type Application, type NextFunction, type Request, type Response } from "express";
+import {
+  Router,
+  type Application,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import { requireAuth } from "@/plugins/auth";
 import { dashboardService } from "./dashboard.service";
 
 type AsyncHandler = (req: Request, res: Response) => Promise<void | Response>;
-const wrap = (fn: AsyncHandler) => (req: Request, res: Response, next: NextFunction) =>
-  Promise.resolve(fn(req, res)).catch(next);
+const wrap =
+  (fn: AsyncHandler) => (req: Request, res: Response, next: NextFunction) =>
+    Promise.resolve(fn(req, res)).catch(next);
 
 export function dashboardRoutes(app: Application): void {
   const router = Router();
@@ -23,7 +30,7 @@ export function dashboardRoutes(app: Application): void {
     }),
   );
 
-  // "My Résumés" data — one entry per distinct résumé filename, including the full
+  // "My resumes" data — one entry per distinct resume filename, including the full
   // question bank. Backs the dashboard panel that proves the "no repeats" claim.
   router.get(
     "/resumes",

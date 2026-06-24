@@ -84,7 +84,7 @@ export default function LandingPage() {
 
 const STEPS = [
   {
-    title: "Add your résumé and the role",
+    title: "Add your resume and the role",
     body: "PDF or DOCX, the job description, and an interview style. About a minute.",
   },
   {

@@ -19,7 +19,7 @@
  *     written by SessionSetupForm when the user starts a new session over an active one.
  *
  * Why localStorage today: the real `GET /api/sessions` list endpoint doesn't exist yet
- * The localStorage archive is a UX safety net so swapping résumés mid-session
+ * The localStorage archive is a UX safety net so swapping resumes mid-session
  * doesn't silently drop the prior context. Once authenticated, the component reads
  * from the server-backed `listSessions()` endpoint instead — the local archive is
  * the offline / unauth fallback.
@@ -57,13 +57,12 @@ import { STORAGE_KEYS } from "@/lib/storageKeys";
 import { deleteSession, listSessions } from "@/services/api";
 import { groupSessionsByResumeAndDay } from "@/lib/sessionGrouping";
 
-
 interface InterviewSidebarProps {
   sessionTitle: string;
   resumeFileName: string | null;
   /**
-   * Parsed plain-text résumé content from the BE session response. Displayed in the
-   * "View résumé" dialog. Optional because legacy archived sessions (pre-parsing) may
+   * Parsed plain-text resume content from the BE session response. Displayed in the
+   * "View resume" dialog. Optional because legacy archived sessions (pre-parsing) may
    * not have it — those entries show "Resume content not available." instead.
    */
   resumeContent: string | null;
@@ -163,9 +162,10 @@ export function InterviewSidebar({
   // for past sessions. Errors degrade silently — the local archive is the fallback
   // when the user is unauth, offline, or hitting a stale cookie.
   const queryClient = useQueryClient();
-  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(
-    null,
-  );
+  const [pendingDelete, setPendingDelete] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const { data: serverSessions = [] } = useQuery({
     queryKey: ["sessions", "list"] as const,
     queryFn: listSessions,
@@ -214,13 +214,11 @@ export function InterviewSidebar({
   const dedupedServer = serverEntries.filter((s) => s.title !== liveTitle);
 
   const sortedArchived = [...archived].sort(
-    (a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
   // localStorage archive only contributes entries that aren't already in the server
   // list — server is authoritative once it ships data.
-  const archiveOnlyExtras =
-    serverEntries.length > 0 ? [] : sortedArchived;
+  const archiveOnlyExtras = serverEntries.length > 0 ? [] : sortedArchived;
 
   const chatrooms: ChatroomEntryData[] = [
     liveEntry,
@@ -247,7 +245,7 @@ export function InterviewSidebar({
   return (
     <div className="flex-1 min-h-0 flex flex-col p-4">
       {/* No brand mark here — `<BrandLink />` lives in the interview shell's header.
-          The sidebar is dedicated entirely to the résumé context + chat history. */}
+          The sidebar is dedicated entirely to the resume context + chat history. */}
 
       {resumeFileName && (
         <Card className="p-3 mb-4 bg-muted/50">
@@ -396,10 +394,7 @@ export function InterviewSidebar({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setPendingDelete(null)}
-            >
+            <Button variant="outline" onClick={() => setPendingDelete(null)}>
               Cancel
             </Button>
             <Button

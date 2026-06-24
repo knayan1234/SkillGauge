@@ -88,7 +88,7 @@ export const memoriesRepo = {
   },
 
   /**
-   * Insert many in one round-trip. Useful for batched session-init writes (résumé
+   * Insert many in one round-trip. Useful for batched session-init writes (resume
    * + JD + first question all indexed together).
    */
   async insertMany(docs: MemoryDoc[]): Promise<void> {
@@ -101,10 +101,7 @@ export const memoriesRepo = {
    * dashboard surface; once volume grows past a few thousand rows per user, swap
    * to a paged variant.
    */
-  async listByUser(
-    userId: string,
-    limit = 200,
-  ): Promise<MemoryDoc[]> {
+  async listByUser(userId: string, limit = 200): Promise<MemoryDoc[]> {
     return (await memories())
       .find({ userId })
       .sort({ createdAt: -1 })

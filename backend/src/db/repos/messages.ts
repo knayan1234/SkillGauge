@@ -57,14 +57,14 @@ export const messagesRepo = {
   },
 
   /**
-   * Distinct question texts asked across all sessions for a given user + résumé file
+   * Distinct question texts asked across all sessions for a given user + resume file
    * name. Backs (a) the question-bank dashboard panel — proves the "no repeated
    * questions" claim by surfacing the running list — and (b) the non-repetition guard
    * in the question generator: the planner reads this list and instructs the LLM to
-   * avoid topics already covered for this résumé.
+   * avoid topics already covered for this resume.
    *
    * Two-stage aggregation: filter messages by `type: "question"` joined to sessions
-   * filtered by `userId + resumeFileName`. The number of past questions per résumé
+   * filtered by `userId + resumeFileName`. The number of past questions per resume
    * stays small (a few hundred at most), so the in-memory lookup is fine — promote
    * to a dedicated index only if profiling shows a hot path here.
    */
