@@ -239,6 +239,16 @@ export async function listSessions(): Promise<Session[]> {
   return res.sessions;
 }
 
+// Fetch a single session's metadata by id (owner-checked on the BE). Used to open a past
+// chat directly — works for ANY of the user's sessions, not just the recent ones the list
+// endpoint returns. Throws ApiError (404 SESSION_NOT_FOUND / 403) on miss.
+export async function fetchSession(sessionId: string): Promise<Session> {
+  const res = await apiFetch<{ session: Session }>(
+    `/api/sessions/${encodeURIComponent(sessionId)}`,
+  );
+  return res.session;
+}
+
 // Delete a session and every row that references it (messages + memories). The
 // backend cascades; the FE invalidates the sessions cache after this resolves so
 // the sidebar drops the entry immediately.

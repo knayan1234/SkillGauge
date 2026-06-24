@@ -12,7 +12,7 @@ import {
   submitAnswer,
   startNextRound,
   fetchSessionMessages,
-  listSessions,
+  fetchSession,
 } from "@/services/api";
 
 interface SessionState {
@@ -23,6 +23,9 @@ interface SessionState {
 
 interface UseSessionReturn extends SessionState {
   isLoading: boolean;
+  /** True when starting a NEW session failed — lets the interview page show a retry panel
+   *  instead of an endless skeleton. */
+  initError: boolean;
   initializeSession: (request: SessionInitRequest) => Promise<void>;
   submitUserAnswer: (answer: string) => Promise<void>;
   startNextRound: () => Promise<void>;
@@ -143,23 +146,21 @@ export function useSession(): UseSessionReturn {
     await nextRoundMutation.mutateAsync().catch(() => undefined);
   }, [nextRoundMutation, state.session]);
 
-  // Loading a past session from the BE. Two parallel calls — listSessions for the metadata
-  // (status, currentQuestionIndex, totalQuestions, etc.) and fetchSessionMessages for the
-  // transcript. We rely on listSessions because the BE doesn't have a single-session GET
-  // today, and the list is small + already cached by the sidebar so the call is usually
-  // a no-op fetch.
+  // Loading a past session from the BE. Two parallel calls — fetchSession for the metadata
+  // (status, currentQuestionIndex, totalQuestions, resume, etc.) and fetchSessionMessages
+  // for the transcript. fetchSession hits GET /api/sessions/:id (owner-checked), so it works
+  // for ANY of the user's sessions — not just the recent ones the list endpoint returns, and
+  // it doesn't re-pull the whole list on every chatroom click.
   //
   // onMutate clears local state immediately so navigating between chatrooms doesn't flash
   // the previous session's transcript while the new one is in flight — the page renders
   // the loading skeleton during the fetch instead.
   const loadMutation = useMutation({
     mutationFn: async (sessionId: string) => {
-      const [sessions, messages] = await Promise.all([
-        listSessions(),
+      const [meta, messages] = await Promise.all([
+        fetchSession(sessionId),
         fetchSessionMessages(sessionId),
       ]);
-      const meta = sessions.find((s) => s.id === sessionId);
-      if (!meta) throw new Error("Session not found");
       return { meta, messages };
     },
     onMutate: () => {
@@ -194,6 +195,7 @@ export function useSession(): UseSessionReturn {
       answerMutation.isPending ||
       nextRoundMutation.isPending ||
       loadMutation.isPending,
+    initError: initMutation.isError,
     initializeSession: initializeSessionCallback,
     submitUserAnswer,
     startNextRound: startNextRoundCallback,

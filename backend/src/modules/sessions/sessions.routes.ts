@@ -52,6 +52,32 @@ export function sessionRoutes(app: Application): void {
     }),
   );
 
+  // Single session's metadata (settings: resume, JD, options, round/progress). Lets the FE
+  // open a past chat by id directly from Mongo — owner-checked — instead of scanning the
+  // capped sessions list (which couldn't reach a user's older sessions beyond the limit).
+  // `/:id` only matches a single path segment, so it never shadows `/:id/messages` etc.
+  router.get(
+    "/:id",
+    wrap(async (req, res) => {
+      const { id } = req.params as { id: string };
+      try {
+        const session = await sessionsService.getSession(req.userId!, id);
+        res.json({ session });
+      } catch (err) {
+        if (err instanceof SessionError) {
+          res
+            .status(statusForSessionError(err.code))
+            .json({
+              code: codeForSessionError(err.code),
+              message: err.message,
+            });
+          return;
+        }
+        throw err;
+      }
+    }),
+  );
+
   // Hydrate a session's full transcript. Used to "open" a past session from the
   // sidebar — the FE replays the messages array into MessageBubbles in order.
   router.get(

@@ -54,7 +54,15 @@ export class GeminiLLMClient implements LLMClient {
         this.sdk.models.generateContent({
           model: this.model,
           contents: [{ role: "user", parts: [{ text: user }] }],
-          config: { systemInstruction: system },
+          config: {
+            systemInstruction: system,
+            // gemini-2.5-flash is a "thinking" model: by default it spends time generating
+            // internal reasoning BEFORE the answer, adding many seconds (sometimes tens) to
+            // every call. We don't need that to write an interview question, and it's the
+            // main reason "start interview" was slow (it's one of the only LLM-backed routes).
+            // Disable it for a fast, interactive response.
+            thinkingConfig: { thinkingBudget: 0 },
+          },
         }),
       ),
     );
@@ -89,6 +97,9 @@ export class GeminiLLMClient implements LLMClient {
           contents: [{ role: "user", parts: [{ text: user }] }],
           config: {
             systemInstruction: system,
+            // Disable 2.5-flash "thinking" (see generateQuestion) — grading is the second
+            // LLM call per answer, so this keeps answer-submit fast too.
+            thinkingConfig: { thinkingBudget: 0 },
             // application/json forces the model to emit a parseable JSON object.
             // We still validate against our zod schema after parsing — Gemini's
             // schema enforcement is best-effort and we'd rather fail loudly here than

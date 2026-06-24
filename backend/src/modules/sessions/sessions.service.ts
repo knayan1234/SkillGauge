@@ -812,6 +812,16 @@ export const sessionsService = {
   },
 
   /**
+   * Fetch a single session's metadata by id, owner-checked. Lets the FE open a past chat
+   * directly from Mongo instead of scanning the capped `listByUser` result — which couldn't
+   * reach a user's older sessions beyond the list limit.
+   */
+  async getSession(userId: string, sessionId: string): Promise<Session> {
+    const doc = await loadOwnedSession(sessionId, userId);
+    return toApiSession(doc);
+  },
+
+  /**
    * Hydrate a single session's full transcript. Owner check + return all messages in
    * createdAt order. Used by the chatroom sidebar to "open" a past session.
    */

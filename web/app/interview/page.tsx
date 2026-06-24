@@ -35,6 +35,7 @@ import { TypingIndicator } from "@/features/interview/TypingIndicator";
 import { ChatSkeleton } from "@/features/interview/ChatSkeleton";
 import { SidebarSkeleton } from "@/features/interview/SidebarSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { CompletionCard } from "@/features/interview/CompletionCard";
 import {
   RetryDialog,
@@ -103,6 +104,7 @@ function InterviewPageBody() {
     messages,
     isLoading,
     isComplete,
+    initError,
     initializeSession,
     submitUserAnswer,
     startNextRound,
@@ -226,6 +228,53 @@ function InterviewPageBody() {
       sessionStorage.removeItem(STORAGE_KEYS.session.active);
     }
   }, [isComplete]);
+
+  // While a new session is starting (or an old chat is loading) and there's nothing to show
+  // yet, surface a toast alongside the skeletons — on the free tier the first request after
+  // ~15 min idle can take up to a minute to wake the server. Dismissed as soon as the
+  // session lands (or the error panel takes over).
+  useEffect(() => {
+    if (isLoading && !session) {
+      toast.loading(
+        "Server is booting up… the first request after a while can take up to a minute.",
+        { id: "booting" },
+      );
+    } else {
+      toast.dismiss("booting");
+    }
+    return () => {
+      toast.dismiss("booting");
+    };
+  }, [isLoading, session]);
+
+  // Starting a NEW session failed (the LLM didn't respond, or the free-tier backend was
+  // still waking up). Don't strand the user on an endless skeleton — show a clear,
+  // actionable message. Past-session loads handle their own failure (toast + route to
+  // /sessions), so this only fires on the new-session path.
+  if (!session && initError && !isLoading) {
+    return (
+      <InterviewLayout>
+        <div className="flex h-full items-center justify-center p-6">
+          <div className="max-w-md space-y-4 text-center">
+            <h2 className="text-lg font-semibold text-foreground">
+              We couldn&apos;t start your interview
+            </h2>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              The interviewer didn&apos;t respond. On the free tier the server can take up
+              to a minute to wake up after a period of inactivity — give it a few seconds
+              and try again.
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <Button onClick={() => window.location.reload()}>Try again</Button>
+              <Button variant="outline" onClick={() => router.push("/setup")}>
+                Back to setup
+              </Button>
+            </div>
+          </div>
+        </div>
+      </InterviewLayout>
+    );
+  }
 
   if (authLoading || !session) {
     return (
